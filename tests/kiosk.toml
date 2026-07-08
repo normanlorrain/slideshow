@@ -1,0 +1,29 @@
+# Kiosk-style config for Phase 5 validation (paths relative to this file).
+# Derived from docs/example.toml, pointed at tests/ assets.
+
+exclude = ["_archive", "archive", "old", "_old"]
+fullscreen = false
+shuffle = false
+interval = 2
+weight = 1
+
+[[albums]]
+folder = "images/numbers"
+order = "sequence"
+
+[[albums]]
+folder = "images/atomic"
+order = "atomic"
+
+[[albums]]
+folder = "images/paintings"
+order = "random"
+weight = 2
+
+[[albums]]
+folder = "images/bitmaps"
+order = "sequence"
+
+[[albums]]
+folder = "pdfs"
+order = "sequence"

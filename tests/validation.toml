@@ -1,0 +1,21 @@
+# Deterministic multi-album config (no random order / no shuffle) for dry-run parity.
+# Paths relative to this file under tests/.
+
+fullscreen = false
+shuffle = false
+interval = 5
+
+[[albums]]
+folder = "images/numbers"
+order = "sequence"
+weight = 1
+
+[[albums]]
+folder = "images/atomic"
+order = "atomic"
+weight = 1
+
+[[albums]]
+folder = "images/bitmaps"
+order = "sequence"
+weight = 1

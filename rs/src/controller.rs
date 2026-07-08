@@ -41,10 +41,13 @@ impl Controller {
             .and_then(|s| s.parse().ok())
             .unwrap_or(0);
 
+        // Install SIGUSR1 before slow work (PDF rasterization) so early reloads
+        // are not delivered as the default terminate action.
+        let reload = signal_handler::init()?;
+
         let screen = Screen::new(config.fullscreen)?;
         let text = TextRenderer::new()?;
         let slideshow = Slideshow::new(&config, seed)?;
-        let reload = signal_handler::init()?;
 
         let photo_interval = Duration::from_secs(config.interval.max(1));
 

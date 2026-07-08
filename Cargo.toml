@@ -72,6 +72,10 @@ signal-hook = "0.3"
 [dev-dependencies]
 # none beyond std for now
 
+[[test]]
+name = "phase5_validation"
+path = "rs/tests/phase5_validation.rs"
+
 # Optimized kiosk binary: smaller, faster, fewer panics that unwind.
 [profile.release]
 lto = true

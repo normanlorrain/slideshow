@@ -1,6 +1,6 @@
 # Convenience targets for the Rust port (repo root).
 
-.PHONY: help build release test dry-run install clean fmt clippy
+.PHONY: help build release test dry-run validate install clean fmt clippy
 
 help:
 	@echo "Targets:"
@@ -8,6 +8,7 @@ help:
 	@echo "  make release   - optimized release binary"
 	@echo "  make test      - cargo test"
 	@echo "  make dry-run   - list 10 slides from tests/images/numbers"
+	@echo "  make validate  - Phase 5 validation harness (scripts/phase5_validate.sh)"
 	@echo "  make install   - cargo install --path .  (~/.cargo/bin)"
 	@echo "  make clean     - cargo clean"
 	@echo "  make fmt       - cargo fmt (if rustfmt available)"
@@ -26,6 +27,9 @@ test:
 
 dry-run:
 	cargo run -q -- --dry-run 10 tests/images/numbers
+
+validate:
+	./scripts/phase5_validate.sh
 
 install:
 	cargo install --path .

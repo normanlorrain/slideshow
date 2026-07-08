@@ -26,7 +26,7 @@ impl ReloadFlag {
         self.inner.load(Ordering::SeqCst)
     }
 
-    #[cfg(test)]
+    /// Set the reload bit (tests and tooling). The real path is SIGUSR1.
     pub fn request(&self) {
         self.inner.store(true, Ordering::SeqCst);
     }
@@ -79,3 +79,4 @@ mod tests {
         assert!(!f.take());
     }
 }
+

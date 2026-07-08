@@ -113,6 +113,8 @@ impl From<&Cli> for CliOverrides {
 fn run() -> Result<(), Error> {
     let cli = Cli::parse();
     log_setup::init();
+    // Register SIGUSR1 as early as possible (before PDF/config heavy work on reload).
+    let _ = magic_lantern::signal_handler::init();
 
     let overrides = CliOverrides::from(&cli);
 
