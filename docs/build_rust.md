@@ -44,26 +44,26 @@ sudo apt install poppler-utils \
   fonts-freefont-ttf fonts-dejavu-core fonts-liberation
 ```
 
-### Display libraries (minifb / X11)
-
-On typical Ubuntu desktops these are already present. If linking fails, install:
+### Display (SDL2)
 
 ```bash
-sudo apt install libx11-dev libxkbcommon-dev libxkbcommon-x11-dev \
-  libxcursor-dev libxi-dev
+sudo apt install libsdl2-dev
 ```
 
-Wayland-only setups usually need the compositor running and a working `DISPLAY` or Wayland socket.
+Runtime also needs the SDL2 shared library (`libsdl2-2.0-0`), usually pulled in by `-dev`.
 
-### Optional: SDL2 (future backend)
-
-The port **currently uses minifb**, not SDL2. When/if the codebase switches to SDL2 (see `rust.md` §18), build-time packages would be:
+Optional (not required to link today — images go through the `image` crate, text via `fontdue`):
 
 ```bash
-sudo apt install libsdl2-dev libsdl2-image-dev libsdl2-ttf-dev
+sudo apt install libsdl2-image-dev libsdl2-ttf-dev
 ```
 
-You do **not** need those for the current binary.
+**pkg-config:** build needs `sdl2.pc` on `PKG_CONFIG_PATH`. If SDL2 is installed in a custom prefix:
+
+```bash
+export PKG_CONFIG_PATH="/path/to/prefix/lib/pkgconfig:$PKG_CONFIG_PATH"
+export LD_LIBRARY_PATH="/path/to/prefix/lib:$LD_LIBRARY_PATH"
+```
 
 ---
 
@@ -126,10 +126,10 @@ cargo build --profile release-with-debug
 
 ### Static linking
 
-Fully static Linux binaries are **not** the default. `minifb` and the system font stack expect a normal dynamic desktop environment.
+Fully static Linux binaries are **not** the default. SDL2 is linked dynamically.
 
 - Prefer distro packages + `cargo build --release` on the target machine or matching glibc.
-- Cross-compiling musl static builds may need extra work for windowing; not supported out of the box.
+- Cross-compiling musl static builds with SDL2 is non-trivial; not supported out of the box.
 - PDF conversion shells out to `pdftoppm` (dynamic system tool), so a “static” binary still needs Poppler at runtime for PDFs.
 
 ---

@@ -62,9 +62,9 @@ image = "0.25"
 kamadak-exif = "0.6"
 # Temporary files for PDF page rasters
 tempfile = "3"
-# Window / event loop (SDL2 preferred long-term; minifb needs no -dev packages)
-minifb = "0.28"
-# Text overlays (system TTF via fontdue)
+# Display / events (pygame-equivalent backend)
+sdl2 = { version = "0.37", default-features = true, features = ["unsafe_textures"] }
+# Text overlays (system TTF rasterized to RGBA, then SDL textures)
 fontdue = "0.9"
 # SIGUSR1 reload (Unix)
 signal-hook = "0.3"

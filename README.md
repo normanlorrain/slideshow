@@ -33,7 +33,7 @@ The Rust port (see branch `rust` / [rust.md](rust.md)) builds a binary also name
 
 ```bash
 # toolchain: rustup or distro cargo/rustc
-sudo apt install poppler-utils fonts-freefont-ttf   # PDF + overlays
+sudo apt install libsdl2-dev poppler-utils fonts-freefont-ttf   # display + PDF + overlays
 cargo build --release
 sudo install -m 755 target/release/magic-lantern /usr/local/bin/
 # or: cargo install --path .

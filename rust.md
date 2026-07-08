@@ -368,7 +368,7 @@ cargo run -- --interval 3 tests/images/paintings
 MAGIC_LANTERN_AUTO_QUIT_SECS=2 cargo run -- --interval 1 tests/images/paintings
 ```
 
-Display backend is **minifb** (no `libsdl2-dev` required). SDL2 remains the longer-term target.
+Display backend is **SDL2** (`libsdl2-dev` at build time). Text overlays still use `fontdue` + system fonts.
 
 ### Phase 4 — CLI polish & packaging ✅ done
 
@@ -377,7 +377,7 @@ Display backend is **minifb** (no `libsdl2-dev` required). SDL2 remains the long
 - [x] Release profile (`lto`, `strip`, `panic = abort`) + `release-with-debug`.
 - [x] Document build deps and packaging: [docs/build_rust.md](docs/build_rust.md), README Rust section, root `Makefile`.
 
-**Note:** Runtime display is **minifb** (X11/Wayland libs), not SDL2. PDF needs **`poppler-utils`** (`pdftoppm`). SDL2 packages are documented only as a future backend.
+**Note:** Runtime display is **SDL2**. PDF needs **`poppler-utils`** (`pdftoppm`).
 
 ```bash
 make release          # target/release/magic-lantern
@@ -542,7 +542,7 @@ Overall surface area is **small (~1k LOC)**; the port is dominated by **dependen
 
 ## 17. Next concrete step
 
-Phases 0–5 are complete. Remaining optional work: production SDL2 backend, in-process PDFium, Python package deprecation, and any Definition-of-Done items still open in §15.
+Phases 0–5 are complete; display backend is **SDL2**. Remaining optional work: in-process PDFium, Python package deprecation, packaging artifacts.
 
 ---
 
@@ -569,8 +569,7 @@ Recorded after running the spikes on this machine (2026-07-08). Environment note
 | Random | **`rand`** | Phase 1 slideshow weights |
 | Images | **`image` 0.25** | Loads JPEG/PNG/BMP used in `tests/`; resize with `FilterType::Triangle` (bilinear stand-in for pygame smoothscale) |
 | EXIF | **`kamadak-exif` 0.6** | Reads `Orientation` + `DateTimeOriginal`; works on sample paintings (dates present). Apply pygame-compatible CCW rotations: tag 3→180°, 6→270°, 8→90° |
-| Display (spike) | **`minifb` 0.28** | Proved 1280×720 window, letterbox blit, quit on `q`/Esc **without** SDL headers |
-| Display (product) | **`sdl2`** with features `image`, `ttf` | Still the production target for pygame parity (fullscreen, fonts, timers, key repeat). Requires `libsdl2-dev`, `libsdl2-image-dev`, `libsdl2-ttf-dev` at build time. Fall back to minifb-only path only if packaging SDL is unacceptable |
+| Display | **`sdl2` 0.37** | Product backend (fullscreen, event pump, textures). Requires `libsdl2-dev`. Images as RGBA textures; text via `fontdue` (no SDL_ttf link required) |
 | PDF (spike) | **`pdftoppm`** (Poppler CLI) | Page 0 @ 600 DPI → PNG `4410×2481` for `Example presentation.pdf`; zero extra Rust deps |
 | PDF (product) | **Prefer in-process `pdfium-render`**, fallback **subprocess `pdftoppm`** | Avoid system MuPDF `-dev` dependency; PDFium is widely used and license-friendly for distribution. Keep tempfile-per-page cache like Python. If `pdfium-render` integration is painful, ship the Poppler CLI fallback behind a feature flag `pdf-poppler` |
 | Temp files | **`tempfile`** | PDF page cache + spike outputs |

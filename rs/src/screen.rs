@@ -1,136 +1,165 @@
-//! Window / framebuffer (Python `screen.py` via minifb).
+//! Window / display via **SDL2** (Python `screen.py` / pygame parity).
 //!
-//! Production long-term target remains SDL2 (see rust.md §18); minifb works
-//! without `libsdl2-dev` and already powers the Phase 0 display spike.
+//! Requires system packages (Debian/Ubuntu):
+//!   `libsdl2-dev`
+//! Optional for other tools: `libsdl2-ttf-dev`, `libsdl2-image-dev`
+//! (this crate uploads RGBA via SDL textures; TTF is not required at link time).
 
 use image::RgbaImage;
-use minifb::{Key, KeyRepeat, Scale, Window, WindowOptions};
+use sdl2::pixels::PixelFormatEnum;
+use sdl2::rect::Rect as SdlRect;
+use sdl2::render::{BlendMode, Canvas, TextureCreator};
+use sdl2::video::{FullscreenType, Window, WindowContext};
+use sdl2::Sdl;
+use sdl2::VideoSubsystem;
 
 use crate::error::{Error, Result};
 use crate::rect::{DEFAULT_SCREEN_HEIGHT, DEFAULT_SCREEN_WIDTH, Rect};
 
-/// Display surface: software framebuffer presented through a window.
+/// SDL2 display: canvas + texture creator for blitting slide/overlay images.
 pub struct Screen {
-    window: Window,
-    buffer: Vec<u32>,
-    width: usize,
-    height: usize,
+    /// Kept alive for the process lifetime of the display.
+    _sdl: Sdl,
+    _video: VideoSubsystem,
+    canvas: Canvas<Window>,
+    texture_creator: TextureCreator<WindowContext>,
+    width: u32,
+    height: u32,
 }
 
 impl Screen {
     pub fn new(fullscreen: bool) -> Result<Self> {
-        let (width, height) = if fullscreen {
-            // Borderless “fullscreen-ish”; true display size is platform-specific.
-            // Prefer the configured default unless the user has a typical HD panel.
-            (DEFAULT_SCREEN_WIDTH as usize, DEFAULT_SCREEN_HEIGHT as usize)
-        } else {
-            (DEFAULT_SCREEN_WIDTH as usize, DEFAULT_SCREEN_HEIGHT as usize)
-        };
+        let sdl = sdl2::init().map_err(|e| Error::Display(format!("SDL init: {e}")))?;
+        let video = sdl
+            .video()
+            .map_err(|e| Error::Display(format!("SDL video: {e}")))?;
 
-        let mut opts = WindowOptions {
-            resize: false,
-            scale: Scale::X1,
-            ..WindowOptions::default()
-        };
+        // Disable unused subsystems similar to pygame mixer/joystick quit.
+        // (Audio/joystick not started by default with video-only use.)
+
+        let mut builder = video.window(
+            "magic-lantern",
+            DEFAULT_SCREEN_WIDTH,
+            DEFAULT_SCREEN_HEIGHT,
+        );
+        builder.position_centered();
         if fullscreen {
-            opts.borderless = true;
-            opts.title = false;
+            builder.fullscreen_desktop();
         }
 
-        let mut window = Window::new("magic-lantern", width, height, opts)
-            .map_err(|e| Error::Display(format!("failed to open window: {e}")))?;
+        let window = builder
+            .build()
+            .map_err(|e| Error::Display(format!("SDL window: {e}")))?;
 
-        window.set_cursor_visibility(false);
-        // Match roughly pygame key repeat (delay 1000ms, interval 100ms) —
-        // minifb's built-in repeat is coarser; we mostly use KeyRepeat::No.
-        window.set_target_fps(30);
+        let mut canvas = window
+            .into_canvas()
+            .accelerated()
+            .present_vsync()
+            .build()
+            .map_err(|e| Error::Display(format!("SDL canvas: {e}")))?;
+
+        canvas.set_blend_mode(BlendMode::Blend);
+
+        let (width, height) = canvas.output_size().map_err(|e| {
+            Error::Display(format!("SDL output size: {e}"))
+        })?;
+
+        // Hide mouse (kiosk).
+        sdl.mouse().show_cursor(false);
 
         tracing::info!("Screen size {width} x {height}");
+        if fullscreen {
+            tracing::debug!("Fullscreen desktop mode");
+        }
+
+        let texture_creator = canvas.texture_creator();
 
         Ok(Self {
-            window,
-            buffer: vec![0u32; width * height],
+            _sdl: sdl,
+            _video: video,
+            canvas,
+            texture_creator,
             width,
             height,
         })
     }
 
     pub fn width(&self) -> usize {
-        self.width
+        self.width as usize
     }
 
     pub fn height(&self) -> usize {
-        self.height
+        self.height as usize
     }
 
     pub fn rect(&self) -> Rect {
         Rect::from_size(self.width as i32, self.height as i32)
     }
 
-    pub fn is_open(&self) -> bool {
-        self.window.is_open()
+    /// Access the SDL context for the event pump (controller).
+    pub fn sdl(&self) -> &Sdl {
+        &self._sdl
+    }
+
+    pub fn set_fullscreen(&mut self, on: bool) -> Result<()> {
+        let mode = if on {
+            FullscreenType::Desktop
+        } else {
+            FullscreenType::Off
+        };
+        self.canvas
+            .window_mut()
+            .set_fullscreen(mode)
+            .map_err(|e| Error::Display(format!("fullscreen: {e}")))?;
+        let (w, h) = self.canvas.output_size().map_err(|e| {
+            Error::Display(format!("SDL output size: {e}"))
+        })?;
+        self.width = w;
+        self.height = h;
+        Ok(())
     }
 
     pub fn fill_black(&mut self) {
-        self.buffer.fill(0);
+        self.canvas.set_draw_color(sdl2::pixels::Color::RGB(0, 0, 0));
+        let _ = self.canvas.clear();
     }
 
-    /// Blit an RGBA image at top-left `(x, y)` (clips to screen).
-    pub fn blit(&mut self, image: &RgbaImage, x: i32, y: i32) {
-        let iw = image.width() as i32;
-        let ih = image.height() as i32;
-        let sw = self.width as i32;
-        let sh = self.height as i32;
-
-        for py in 0..ih {
-            let dy = y + py;
-            if dy < 0 || dy >= sh {
-                continue;
-            }
-            for px in 0..iw {
-                let dx = x + px;
-                if dx < 0 || dx >= sw {
-                    continue;
-                }
-                let p = image.get_pixel(px as u32, py as u32).0;
-                let [r, g, b, a] = p;
-                if a == 0 {
-                    continue;
-                }
-                // minifb 0RGB; simple replace (no alpha blend for photo blits).
-                let color = if a == 255 {
-                    ((r as u32) << 16) | ((g as u32) << 8) | (b as u32)
-                } else {
-                    // Text overlays use partial alpha — blend onto existing.
-                    let dst = self.buffer[dy as usize * self.width + dx as usize];
-                    let dr = (dst >> 16) & 0xff;
-                    let dg = (dst >> 8) & 0xff;
-                    let db = dst & 0xff;
-                    let aa = a as u32;
-                    let inv = 255 - aa;
-                    let nr = (r as u32 * aa + dr * inv) / 255;
-                    let ng = (g as u32 * aa + dg * inv) / 255;
-                    let nb = (b as u32 * aa + db * inv) / 255;
-                    (nr << 16) | (ng << 8) | nb
-                };
-                self.buffer[dy as usize * self.width + dx as usize] = color;
-            }
+    /// Blit an RGBA image at top-left `(x, y)`.
+    pub fn blit(&mut self, image: &RgbaImage, x: i32, y: i32) -> Result<()> {
+        let w = image.width();
+        let h = image.height();
+        if w == 0 || h == 0 {
+            return Ok(());
         }
+
+        let mut texture = self
+            .texture_creator
+            .create_texture_streaming(PixelFormatEnum::RGBA32, w, h)
+            .map_err(|e| Error::Display(format!("texture: {e}")))?;
+
+        texture.set_blend_mode(BlendMode::Blend);
+
+        texture
+            .with_lock(None, |buffer: &mut [u8], pitch: usize| {
+                for row in 0..h as usize {
+                    let src_off = row * (w as usize) * 4;
+                    let dst_off = row * pitch;
+                    let n = (w as usize) * 4;
+                    buffer[dst_off..dst_off + n]
+                        .copy_from_slice(&image.as_raw()[src_off..src_off + n]);
+                }
+            })
+            .map_err(|e| Error::Display(format!("texture lock: {e}")))?;
+
+        let dest = SdlRect::new(x, y, w, h);
+        self.canvas
+            .copy(&texture, None, dest)
+            .map_err(|e| Error::Display(format!("canvas copy: {e}")))?;
+        Ok(())
     }
 
-    /// Present the framebuffer and process window events.
-    pub fn present(&mut self) -> Result<()> {
-        self.window
-            .update_with_buffer(&self.buffer, self.width, self.height)
-            .map_err(|e| Error::Display(format!("present failed: {e}")))
-    }
-
-    pub fn is_key_pressed(&self, key: Key) -> bool {
-        self.window.is_key_pressed(key, KeyRepeat::No)
-    }
-
-    /// True if any of the keys were pressed this frame.
-    pub fn any_key_pressed(&self, keys: &[Key]) -> bool {
-        keys.iter().any(|k| self.is_key_pressed(*k))
+    /// Flip / present the backbuffer.
+    pub fn present(&mut self) {
+        self.canvas.present();
     }
 }

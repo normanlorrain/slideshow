@@ -1,11 +1,12 @@
 //! Event loop / ringmaster (Python `controller.py`).
 //!
+//! SDL2 event pump: keyboard, quit, timer (via timeouts), SIGUSR1 reload.
 //! Keys: space pause, q quit, n/→ next, p/← previous, y year overlay.
-//! Timer advances slides; `SIGUSR1` requests reload (returns `true` from `run`).
 
 use std::time::{Duration, Instant};
 
-use minifb::Key;
+use sdl2::event::Event;
+use sdl2::keyboard::Keycode;
 
 use crate::config::Config;
 use crate::error::{Error, Result};
@@ -41,8 +42,7 @@ impl Controller {
             .and_then(|s| s.parse().ok())
             .unwrap_or(0);
 
-        // Install SIGUSR1 before slow work (PDF rasterization) so early reloads
-        // are not delivered as the default terminate action.
+        // Install SIGUSR1 before slow work (PDF rasterization).
         let reload = signal_handler::init()?;
 
         let screen = Screen::new(config.fullscreen)?;
@@ -73,7 +73,17 @@ impl Controller {
     pub fn run(&mut self) -> Result<bool> {
         self.show_new_slide(Direction::Next)?;
 
-        while self.screen.is_open() {
+        let mut event_pump = self
+            .screen
+            .sdl()
+            .event_pump()
+            .map_err(|e| Error::Display(format!("SDL event pump: {e}")))?;
+
+        // Roughly match pygame key repeat: delay 1000ms, interval 100ms.
+        // SDL2 enables key repeat by default; we ignore `repeat` events for
+        // discrete actions (pause/year) and allow them for next/prev if desired.
+        // Here we ignore all OS key-repeat for parity with clear() after keydown.
+        loop {
             if self.reload.take() {
                 tracing::info!("Got signal. Reloading slide show.");
                 return Ok(true);
@@ -86,34 +96,81 @@ impl Controller {
                 }
             }
 
+            // How long until the next photo event (or a short poll for signals).
+            let wait_ms = if self.pause {
+                100u32
+            } else {
+                let remaining = self
+                    .next_due
+                    .saturating_duration_since(Instant::now())
+                    .as_millis()
+                    .min(100) as u32;
+                remaining.max(1)
+            };
+
+            // Block for events (pygame.event.wait style) with timeout.
+            for event in event_pump.wait_timeout_iter(wait_ms) {
+                match event {
+                    Event::Quit { .. } => {
+                        tracing::debug!("window quit");
+                        return Ok(false);
+                    }
+                    Event::KeyDown {
+                        keycode: Some(key),
+                        repeat: false,
+                        ..
+                    } => match key {
+                        Keycode::Q | Keycode::Escape => {
+                            tracing::debug!("quit key");
+                            return Ok(false);
+                        }
+                        Keycode::N | Keycode::Right => {
+                            self.next()?;
+                        }
+                        Keycode::P | Keycode::Left => {
+                            self.previous()?;
+                        }
+                        Keycode::Y => {
+                            self.toggle_year()?;
+                        }
+                        Keycode::Space => {
+                            self.toggle_pause()?;
+                        }
+                        _ => {}
+                    },
+                    _ => {}
+                }
+            }
+
+            // Drain any additional pending events without blocking.
+            for event in event_pump.poll_iter() {
+                match event {
+                    Event::Quit { .. } => return Ok(false),
+                    Event::KeyDown {
+                        keycode: Some(key),
+                        repeat: false,
+                        ..
+                    } => match key {
+                        Keycode::Q | Keycode::Escape => return Ok(false),
+                        Keycode::N | Keycode::Right => self.next()?,
+                        Keycode::P | Keycode::Left => self.previous()?,
+                        Keycode::Y => self.toggle_year()?,
+                        Keycode::Space => self.toggle_pause()?,
+                        _ => {}
+                    },
+                    _ => {}
+                }
+            }
+
             if !self.pause && Instant::now() >= self.next_due {
                 self.show_new_slide(Direction::Next)?;
-                tracing::debug!("Next slide in {} msec", self.photo_interval.as_millis());
+                tracing::debug!(
+                    "Next slide in {} msec",
+                    self.photo_interval.as_millis()
+                );
                 self.arm_timer();
             }
-
-            if self.screen.is_key_pressed(Key::Q) {
-                tracing::debug!("quit key");
-                return Ok(false);
-            }
-            if self.screen.any_key_pressed(&[Key::N, Key::Right]) {
-                self.next()?;
-            }
-            if self.screen.any_key_pressed(&[Key::P, Key::Left]) {
-                self.previous()?;
-            }
-            if self.screen.is_key_pressed(Key::Y) {
-                self.toggle_year()?;
-            }
-            if self.screen.is_key_pressed(Key::Space) {
-                self.toggle_pause()?;
-            }
-
-            self.screen.present()?;
         }
-
-        // Window closed
-        Ok(false)
     }
 
     fn arm_timer(&mut self) {
@@ -123,7 +180,6 @@ impl Controller {
     fn show_new_slide(&mut self, direction: Direction) -> Result<()> {
         let screen_rect = self.screen.rect();
 
-        // Retry until a loadable slide is found (Python loops on SlideException).
         let mut attempts = 0;
         let slide = loop {
             attempts += 1;
@@ -149,18 +205,14 @@ impl Controller {
             }
         };
 
-        tracing::debug!(
-            "{} interval:{}",
-            slide.filename(),
-            slide.interval()
-        );
+        tracing::debug!("{} interval:{}", slide.filename(), slide.interval());
 
         self.screen.fill_black();
         let surface = slide.get_surface(screen_rect)?;
         let (x, y) = slide.coordinates(screen_rect)?;
-        self.screen.blit(&surface, x, y);
+        self.screen.blit(&surface, x, y)?;
         self.show_metadata()?;
-        self.screen.present()?;
+        self.screen.present();
 
         self.photo_interval = Duration::from_secs(slide.interval().max(1));
         Ok(())
@@ -179,16 +231,16 @@ impl Controller {
 
         if self.pause {
             let pause_img = self.text.message_normal("PAUSE");
-            self.screen.blit(&pause_img, pad, pad);
+            self.screen.blit(&pause_img, pad, pad)?;
 
             let filename = self.text.message_normal(&slide.filename());
             let x = self.screen.width() as i32 - filename.width() as i32 - pad;
             let y = self.screen.height() as i32 - filename.height() as i32 - pad;
-            self.screen.blit(&filename, x, y);
+            self.screen.blit(&filename, x, y)?;
 
             let datetime = self.text.message_normal(&slide.datetime());
             let y = self.screen.height() as i32 - datetime.height() as i32 - pad;
-            self.screen.blit(&datetime, pad, y);
+            self.screen.blit(&datetime, pad, y)?;
         }
 
         if self.show_year {
@@ -196,7 +248,7 @@ impl Controller {
             let year = if dt.len() >= 4 { &dt[..4] } else { &dt };
             let year_img = self.text.message_heading(year);
             let x = self.screen.width() as i32 - year_img.width() as i32 - pad;
-            self.screen.blit(&year_img, x, pad);
+            self.screen.blit(&year_img, x, pad)?;
         }
         Ok(())
     }
@@ -204,9 +256,8 @@ impl Controller {
     fn toggle_pause(&mut self) -> Result<()> {
         self.pause = !self.pause;
         if self.pause {
-            // Stop timer by pushing due far away; we gate on `pause` flag.
             self.show_metadata()?;
-            self.screen.present()?;
+            self.screen.present();
         } else {
             self.show_new_slide(Direction::Next)?;
             self.arm_timer();
@@ -217,18 +268,17 @@ impl Controller {
     fn toggle_year(&mut self) -> Result<()> {
         self.show_year = !self.show_year;
         if !self.show_year {
-            // Redraw slide without year.
             if let Some(slide) = self.slideshow.current().cloned() {
                 let screen_rect = self.screen.rect();
                 self.screen.fill_black();
                 if let Ok(surface) = slide.get_surface(screen_rect) {
                     let (x, y) = slide.coordinates(screen_rect)?;
-                    self.screen.blit(&surface, x, y);
+                    self.screen.blit(&surface, x, y)?;
                 }
             }
         }
         self.show_metadata()?;
-        self.screen.present()?;
+        self.screen.present();
         Ok(())
     }
 
@@ -260,6 +310,5 @@ pub fn dry_run(config: &Config) -> Result<bool> {
         .ok_or_else(|| Error::Config("dry_run not set".into()))?;
     let mut show = Slideshow::new(config, seed)?;
     crate::slideshow::dry_run(&mut show, n)?;
-    Ok(false) // never reload after dry-run
+    Ok(false)
 }
-
