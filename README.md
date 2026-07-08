@@ -9,7 +9,9 @@ You can specify a single directory/folder for the images, or organise them into 
 
 ## Installation
 
-### Windows
+### Python (pipx)
+
+#### Windows
 
 [pipx](https://pipx.pypa.io/stable/), via [Scoop](https://scoop.sh/)
 
@@ -19,42 +21,55 @@ pipx ensurepath
 pipx install magic-lantern
 ```
 
-### Debian
+#### Debian
 
 ```bash
 pipx install magic-lantern
 ```
 
-## Usage
+### Rust (from source)
 
-See 
+The Rust port (see branch `rust` / [rust.md](rust.md)) builds a binary also named **`magic-lantern`**.
+
+```bash
+# toolchain: rustup or distro cargo/rustc
+sudo apt install poppler-utils fonts-freefont-ttf   # PDF + overlays
+cargo build --release
+sudo install -m 755 target/release/magic-lantern /usr/local/bin/
+# or: cargo install --path .
+```
+
+Full dependency list, release profile notes, and packaging tips: [docs/build_rust.md](docs/build_rust.md).
+
+## Usage
 
 ```bash
 magic-lantern --help
+```
+
+```text
 Usage: magic-lantern [OPTIONS] [DIRECTORY]
 
-  A slide show generator. Specify a directory containing image files or use -c
-  to specify a config file.
+A slide show generator. Specify a directory containing image files or use -c
+to specify a config file.
 
 Options:
-  --version                     Show the version and exit.
-  -c, --config-file FILE        Configuration file.
-  -f, --fullscreen              Full screen mode
-  -s, --shuffle                 Shuffle the slides
-  -d, --dry-run INTEGER RANGE   Test mode.  Only display the slide names.
-                                Specify the number of slides.  [x>=1]
-  -i, --interval INTEGER RANGE  Interval (seconds) between images.  [x>=1]
-  -e, --exclude TEXT            Exclude the given directories.  Multiple
-                                entries are permitted.
-  --help                        Show this message and exit.
+  -c, --config-file <FILE>   Configuration file
+  -f, --fullscreen           Full screen mode
+  -s, --shuffle              Shuffle the slides
+  -d, --dry-run <N>          Test mode; print slide names (N >= 1)
+  -i, --interval <SECS>      Interval in seconds between images (>= 1)
+  -e, --exclude <DIR>        Exclude directory name (repeatable)
+  -h, --help                 Print help
+  -V, --version              Print version
 ```
 
 When running, use the following keys to control the slideshow:
 - **space bar**: play / pause
 - **q**: quit
 - **p**, **left arrow**: previous image
-- **n**, **right arrow**: previous image
-- **y**, display of year (on/off)
+- **n**, **right arrow**: next image
+- **y**: display of year (on/off)
 
 ## Reset
 

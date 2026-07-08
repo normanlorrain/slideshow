@@ -6,7 +6,16 @@ description = "A presentation tool for kiosks, digital signage, slide shows (Rus
 license = "MIT"
 readme = "README.md"
 repository = "https://github.com/normanlorrain/magic-lantern"
+homepage = "https://github.com/normanlorrain/magic-lantern"
 authors = ["Norman Lorrain <normanlorrain@gmail.com>"]
+keywords = ["slideshow", "kiosk", "digital-signage", "images"]
+categories = ["multimedia", "command-line-utilities"]
+# Dual-layout: Python package remains under src/magic_lantern/; Rust under rs/.
+exclude = [
+    "tests/images/**",
+    "tests/pdfs/**",
+    "*.log",
+]
 
 # Keep the Rust sources under rs/ so they do not collide with the Python
 # package layout at src/magic_lantern/.
@@ -14,6 +23,7 @@ authors = ["Norman Lorrain <normanlorrain@gmail.com>"]
 name = "magic_lantern"
 path = "rs/src/lib.rs"
 
+# Binary must stay named `magic-lantern` for: pkill -USR1 magic-lantern
 [[bin]]
 name = "magic-lantern"
 path = "rs/src/main.rs"
@@ -62,6 +72,17 @@ signal-hook = "0.3"
 [dev-dependencies]
 # none beyond std for now
 
+# Optimized kiosk binary: smaller, faster, fewer panics that unwind.
 [profile.release]
 lto = true
 codegen-units = 1
+opt-level = 3
+strip = true
+panic = "abort"
+
+# Slightly faster rebuilds when iterating on release bugs.
+[profile.release-with-debug]
+inherits = "release"
+strip = false
+debug = true
+panic = "unwind"

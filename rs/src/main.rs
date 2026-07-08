@@ -1,6 +1,6 @@
 //! magic-lantern — Rust port CLI.
 //!
-//! Phases 0–3: config, slideshow, slide pipeline, controller/UI, SIGUSR1 reload.
+//! Binary name is `magic-lantern` so `pkill -USR1 magic-lantern` matches Python.
 
 use std::path::PathBuf;
 use std::process::ExitCode;
@@ -18,35 +18,81 @@ use magic_lantern::log_setup;
 #[command(
     name = "magic-lantern",
     version,
-    after_help = "To reload the configuration, send it the USR1 signal:\n\n    pkill -USR1 magic-lantern\n\nKeys while running: space pause, q quit, n/→ next, p/← previous, y year.\n\nSee https://github.com/normanlorrain/magic-lantern for more details."
+    about = "A slide show generator. Specify a directory containing image files or use -c to specify a config file.",
+    long_about = "A presentation tool for kiosks, digital signage, and slide shows.\n\n\
+Supports PNG, JPEG, BMP, and PDF (each PDF page is converted to an image).\n\n\
+Provide either a DIRECTORY of images or a TOML config file with -c / --config-file \
+(not both).",
+    after_help = "\
+Keys while running:
+  space          play / pause
+  q              quit
+  n, right       next image
+  p, left        previous image
+  y              year overlay on/off
+
+Reload configuration (Unix):
+  pkill -USR1 magic-lantern
+
+Environment:
+  MAGIC_LANTERN_SEED=<u64>           deterministic RNG for shuffle / album weights
+  MAGIC_LANTERN_AUTO_QUIT_SECS=<n>   auto-exit after n seconds (smoke tests)
+  RUST_LOG=<filter>                  tracing filter (default: info)
+
+See https://github.com/normanlorrain/magic-lantern for more details."
 )]
 struct Cli {
     /// Configuration file.
-    #[arg(short = 'c', long = "config-file", value_name = "FILE")]
+    #[arg(
+        short = 'c',
+        long = "config-file",
+        value_name = "FILE",
+        help = "Configuration file."
+    )]
     config_file: Option<PathBuf>,
 
     /// Full screen mode.
-    #[arg(short = 'f', long = "fullscreen", default_value_t = false)]
+    #[arg(short = 'f', long = "fullscreen", help = "Full screen mode")]
     fullscreen: bool,
 
     /// Shuffle the slides.
-    #[arg(short = 's', long = "shuffle", default_value_t = false)]
+    #[arg(short = 's', long = "shuffle", help = "Shuffle the slides")]
     shuffle: bool,
 
     /// Test mode. Only display the slide names. Specify the number of slides.
-    #[arg(short = 'd', long = "dry-run", value_name = "N", value_parser = clap::value_parser!(u64).range(1..))]
+    #[arg(
+        short = 'd',
+        long = "dry-run",
+        value_name = "N",
+        value_parser = clap::value_parser!(u64).range(1..),
+        help = "Test mode. Only display the slide names. Specify the number of slides. [x>=1]"
+    )]
     dry_run: Option<u64>,
 
     /// Interval (seconds) between images.
-    #[arg(short = 'i', long = "interval", value_name = "SECS", value_parser = clap::value_parser!(u64).range(1..))]
+    #[arg(
+        short = 'i',
+        long = "interval",
+        value_name = "SECS",
+        value_parser = clap::value_parser!(u64).range(1..),
+        help = "Interval (seconds) between images. [x>=1]"
+    )]
     interval: Option<u64>,
 
     /// Exclude the given directories. Multiple entries are permitted.
-    #[arg(short = 'e', long = "exclude", value_name = "DIR")]
+    #[arg(
+        short = 'e',
+        long = "exclude",
+        value_name = "DIR",
+        help = "Exclude the given directories. Multiple entries are permitted."
+    )]
     exclude: Vec<String>,
 
     /// Directory containing image files (mutually exclusive with -c).
-    #[arg(value_name = "DIRECTORY")]
+    #[arg(
+        value_name = "DIRECTORY",
+        help = "Directory containing image files (mutually exclusive with -c)."
+    )]
     directory: Option<PathBuf>,
 }
 
@@ -74,11 +120,8 @@ fn run() -> Result<(), Error> {
     loop {
         let config = Config::from_cli(&overrides)?;
 
-        if config.directory.is_some() {
-            tracing::info!(
-                "Single directory slide show: {}",
-                config.directory.as_ref().unwrap().display()
-            );
+        if let Some(ref dir) = config.directory {
+            tracing::info!("Single directory slide show: {}", dir.display());
         }
 
         let should_reload = if config.dry_run.is_some() {

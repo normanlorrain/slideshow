@@ -370,12 +370,21 @@ MAGIC_LANTERN_AUTO_QUIT_SECS=2 cargo run -- --interval 1 tests/images/paintings
 
 Display backend is **minifb** (no `libsdl2-dev` required). SDL2 remains the longer-term target.
 
-### Phase 4 — CLI polish & packaging
+### Phase 4 — CLI polish & packaging ✅ done
 
-- [ ] `clap` help/version matching README flags.
-- [ ] Binary name `magic-lantern` for `pkill -USR1 magic-lantern`.
-- [ ] Release profile, optional static/SDL dynamic linking notes for Debian.
-- [ ] Document build deps (SDL2, SDL2_image, SDL2_ttf, PDF lib).
+- [x] `clap` help/version matching README flags (`rs/src/main.rs`).
+- [x] Binary name `magic-lantern` for `pkill -USR1 magic-lantern` (`Cargo.toml` `[[bin]]`).
+- [x] Release profile (`lto`, `strip`, `panic = abort`) + `release-with-debug`.
+- [x] Document build deps and packaging: [docs/build_rust.md](docs/build_rust.md), README Rust section, root `Makefile`.
+
+**Note:** Runtime display is **minifb** (X11/Wayland libs), not SDL2. PDF needs **`poppler-utils`** (`pdftoppm`). SDL2 packages are documented only as a future backend.
+
+```bash
+make release          # target/release/magic-lantern
+make test
+make dry-run
+cargo install --path .
+```
 
 ### Phase 5 — Validation
 
@@ -496,7 +505,7 @@ Each PR should leave `cargo test` and dry-run usable.
 - [ ] Unix `SIGUSR1` reloads config.
 - [ ] Dry-run mode without opening a window.
 - [ ] Logging to rotating files + console.
-- [ ] Build and run instructions for Debian-like systems.
+- [x] Build and run instructions for Debian-like systems. (`docs/build_rust.md`)
 - [ ] No regression on empty/bad path handling (clear errors).
 
 ---
@@ -520,7 +529,7 @@ Overall surface area is **small (~1k LOC)**; the port is dominated by **dependen
 
 ## 17. Next concrete step
 
-Phases 0–3 are complete. **Next: Phase 4** — CLI polish & packaging docs (or Phase 5 validation).
+Phases 0–4 are complete. **Next: Phase 5** — validation (kiosk run, dry-run parity, memory/history, SIGUSR1 reload with file changes).
 
 ---
 
