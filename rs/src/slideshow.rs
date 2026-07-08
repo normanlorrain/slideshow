@@ -105,7 +105,8 @@ impl Slideshow {
             let slide = self.next_from_generator()?;
             self.history.push_back(slide.clone());
             if self.history.len() > HISTORY_LIMIT {
-                if let Some(mut old) = self.history.pop_front() {
+                if let Some(old) = self.history.pop_front() {
+                    // Shared Rc identity: frees pixels for album + any other handles.
                     old.unload_image();
                 }
             }
@@ -279,7 +280,7 @@ mod tests {
         let mut show = Slideshow::new_images_only(&cfg, 0).unwrap();
         let mut names = Vec::new();
         for _ in 0..6 {
-            names.push(show.get_next_slide().unwrap().filename().to_string());
+            names.push(show.get_next_slide().unwrap().filename());
         }
         // 3 images, sorted, repeated
         assert_eq!(names[0], names[3]);
@@ -296,16 +297,16 @@ mod tests {
         let mut a = Slideshow::new_images_only(&cfg, 12345).unwrap();
         let mut b = Slideshow::new_images_only(&cfg, 12345).unwrap();
         let sa: Vec<_> = (0..20)
-            .map(|_| a.get_next_slide().unwrap().path.clone())
+            .map(|_| a.get_next_slide().unwrap().path())
             .collect();
         let sb: Vec<_> = (0..20)
-            .map(|_| b.get_next_slide().unwrap().path.clone())
+            .map(|_| b.get_next_slide().unwrap().path())
             .collect();
         assert_eq!(sa, sb);
 
         let mut c = Slideshow::new_images_only(&cfg, 99999).unwrap();
         let sc: Vec<_> = (0..20)
-            .map(|_| c.get_next_slide().unwrap().path.clone())
+            .map(|_| c.get_next_slide().unwrap().path())
             .collect();
         assert_ne!(sa, sc);
     }
@@ -318,22 +319,22 @@ mod tests {
         let mut show = Slideshow::new_images_only(&cfg, 0).unwrap();
         // First album (numbers): one slide
         let s0 = show.get_next_slide().unwrap();
-        assert!(s0.path.to_string_lossy().contains("numbers"));
+        assert!(s0.path().to_string_lossy().contains("numbers"));
         // Second album (atomic): entire group
         let mut atomic_run = Vec::new();
         for _ in 0..3 {
             let s = show.get_next_slide().unwrap();
             assert!(
-                s.path.to_string_lossy().contains("atomic"),
+                s.path().to_string_lossy().contains("atomic"),
                 "expected atomic slide, got {}",
-                s.path.display()
+                s.path().display()
             );
-            atomic_run.push(s.filename().to_string());
+            atomic_run.push(s.filename());
         }
         assert_eq!(atomic_run.len(), 3);
         // Next: paintings
         let s = show.get_next_slide().unwrap();
-        assert!(s.path.to_string_lossy().contains("paintings"));
+        assert!(s.path().to_string_lossy().contains("paintings"));
     }
 
     #[test]
@@ -343,17 +344,36 @@ mod tests {
         let a = show.get_next_slide().unwrap();
         let b = show.get_next_slide().unwrap();
         let _c = show.get_next_slide().unwrap();
-        assert_ne!(a.path, b.path);
+        assert_ne!(a.path(), b.path());
 
         let back = show.get_previous_slide().unwrap();
         // From live edge (c), previous jumps to b (cursor -2 → second last)
-        assert_eq!(back.path, b.path);
+        assert_eq!(back.path(), b.path());
 
         let back2 = show.get_previous_slide().unwrap();
-        assert_eq!(back2.path, a.path);
+        assert_eq!(back2.path(), a.path());
 
         let forward = show.get_next_slide().unwrap();
-        assert_eq!(forward.path, b.path);
+        assert_eq!(forward.path(), b.path());
+    }
+
+    #[test]
+    fn history_unload_frees_shared_image() {
+        let cfg = numbers_only_config(false);
+        let mut show = Slideshow::new_images_only(&cfg, 0).unwrap();
+        let mut kept = Vec::new();
+        for _ in 0..12 {
+            let s = show.get_next_slide().unwrap();
+            // Load pixels as the UI would.
+            s.get_surface_default().unwrap();
+            kept.push(s);
+        }
+        assert_eq!(show.history_len(), 10);
+        // Oldest two should have been unloaded when history capped.
+        assert!(!kept[0].is_loaded());
+        assert!(!kept[1].is_loaded());
+        // Most recent remain loaded.
+        assert!(kept[11].is_loaded());
     }
 
     #[test]

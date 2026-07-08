@@ -1,6 +1,6 @@
 //! An album is a collection of slides with sequence / random / atomic order.
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use rand::rngs::StdRng;
 use rand::seq::SliceRandom;
@@ -153,8 +153,8 @@ impl Album {
         out
     }
 
-    pub fn paths(&self) -> impl Iterator<Item = &Path> {
-        self.slides.iter().map(|s| s.path.as_path())
+    pub fn paths(&self) -> Vec<PathBuf> {
+        self.slides.iter().map(|s| s.path()).collect()
     }
 }
 
@@ -217,6 +217,7 @@ mod tests {
         assert_eq!(album.slide_count(), 3);
         let names: Vec<_> = album
             .paths()
+            .iter()
             .map(|p| p.file_name().unwrap().to_string_lossy().into_owned())
             .collect();
         // Lexicographic by full path; basenames start 1_, 2_, 3_
@@ -255,8 +256,8 @@ mod tests {
         let mut rng_b = seeded_rng(42);
         let a = Album::open(&cfg, &[], None, &mut rng_a).unwrap();
         let b = Album::open(&cfg, &[], None, &mut rng_b).unwrap();
-        let pa: Vec<_> = a.paths().map(|p| p.to_path_buf()).collect();
-        let pb: Vec<_> = b.paths().map(|p| p.to_path_buf()).collect();
+        let pa = a.paths();
+        let pb = b.paths();
         assert_eq!(pa, pb);
     }
 

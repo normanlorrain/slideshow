@@ -339,11 +339,18 @@ MAGIC_LANTERN_SEED=1 cargo run -- -c "tests/example 1.toml" --dry-run 12
 
 UI mode without `--dry-run` exits with a clear “not implemented yet” message until Phase 3.
 
-### Phase 2 — Slide pipeline
+### Phase 2 — Slide pipeline ✅ done
 
-- [ ] Lazy load/unload.
-- [ ] Fit-to-screen math (port pygame `Rect.fit` algorithm exactly).
-- [ ] Temp dir lifecycle for PDF pages.
+- [x] Lazy load/unload (`rs/src/slide.rs`, shared `Rc` identity with history).
+- [x] Fit-to-screen math (`rs/src/rect.rs` — exact pygame `Rect.fit` / f32).
+- [x] Temp dir lifecycle for PDF pages (`PdfCache` + drop cleanup tests).
+
+**Run:**
+
+```bash
+cargo test
+# load/unload + fit covered by slide:: and rect:: unit tests
+```
 
 ### Phase 3 — Controller / UI
 
@@ -501,7 +508,7 @@ Overall surface area is **small (~1k LOC)**; the port is dominated by **dependen
 
 ## 17. Next concrete step
 
-Phases 0–1 are complete. **Next: Phase 2** — slide pipeline (lazy load/unload, EXIF, fit-to-screen math, PDF temp lifecycle integration with slides).
+Phases 0–2 are complete. **Next: Phase 3** — controller / UI (event loop, overlays, SIGUSR1 reload).
 
 ---
 

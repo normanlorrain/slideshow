@@ -23,6 +23,10 @@ pub enum Error {
 
     #[error("PDF conversion failed: {0}")]
     Pdf(String),
+
+    /// Bad or unreadable slide file (Python `SlideException`).
+    #[error("bad slide file: {0}")]
+    Slide(PathBuf),
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
