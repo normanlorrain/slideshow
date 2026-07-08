@@ -35,7 +35,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         std::process::exit(1);
     }
 
-    let mut cache = PdfCache::with_dpi(150)?;
+    let mut cache = PdfCache::with_dpi(200)?;
     let pages = cache.convert(&pdf)?;
     println!("pages: {}", pages.len());
     for (i, p) in pages.iter().enumerate() {

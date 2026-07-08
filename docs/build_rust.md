@@ -35,7 +35,7 @@ source "$HOME/.cargo/env"
 
 | Feature | Requirement | Notes |
 |---------|-------------|-------|
-| **PDF slides** | **PDFium** shared library (`libpdfium.so`) | In-process via `pdfium-render` at **600 DPI** |
+| **PDF slides** | **PDFium** shared library (`libpdfium.so`) | In-process via `pdfium-render` at **200 DPI** (screen-appropriate) |
 | **Text overlays** | fonts with a sans-bold face | FreeSans Bold, DejaVu Sans Bold, etc. |
 | **Images** | none extra | JPEG/PNG/BMP via pure-Rust `image` crate |
 
@@ -77,23 +77,42 @@ You no longer need `poppler-utils` / `pdftoppm` for this Rust port.
 
 ### Display (SDL2)
 
+**Build needs the development package** (headers + linker name `libSDL2.so`).  
+Having only the runtime package (`libsdl2-2.0-0`) is **not** enough — you get:
+
+```text
+rust-lld: error: unable to find library -lSDL2
+```
+
+**Fix (recommended):**
+
 ```bash
 sudo apt install libsdl2-dev
 ```
 
-Runtime also needs the SDL2 shared library (`libsdl2-2.0-0`), usually pulled in by `-dev`.
+That provides `libSDL2.so`, headers, and `sdl2.pc` for `pkg-config`.
 
-Optional (not required to link today — images go through the `image` crate, text via `fontdue`):
+Optional (not required for this app — images use `image`, text uses `fontdue`):
 
 ```bash
 sudo apt install libsdl2-image-dev libsdl2-ttf-dev
 ```
 
-**pkg-config:** build needs `sdl2.pc` on `PKG_CONFIG_PATH`. If SDL2 is installed in a custom prefix:
+**Without sudo:** use a user-local SDL2 prefix (already supported by `make`):
 
 ```bash
-export PKG_CONFIG_PATH="/path/to/prefix/lib/pkgconfig:$PKG_CONFIG_PATH"
-export LD_LIBRARY_PATH="/path/to/prefix/lib:$LD_LIBRARY_PATH"
+source scripts/env-build.sh   # uses ~/.local/sdl2-prefix if present
+cargo build --release
+# or simply:
+make release
+```
+
+Manual exports if you maintain a custom prefix:
+
+```bash
+export PKG_CONFIG_PATH="$HOME/.local/sdl2-prefix/usr/lib/x86_64-linux-gnu/pkgconfig"
+export LIBRARY_PATH="$HOME/.local/sdl2-prefix/usr/lib/x86_64-linux-gnu"
+export LD_LIBRARY_PATH="$HOME/.local/sdl2-prefix/usr/lib/x86_64-linux-gnu:$LD_LIBRARY_PATH"
 ```
 
 ---

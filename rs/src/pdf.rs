@@ -127,7 +127,7 @@ pub fn pdf_available() -> bool {
 /// Owns the temporary directory holding rasterized PDF pages.
 pub struct PdfCache {
     dir: TempDir,
-    /// Render DPI (Python / Poppler default was 600).
+    /// Render DPI for on-screen slideshows (default 200; Python used 600 for print-ish quality).
     dpi: u32,
     counter: u64,
 }
@@ -150,7 +150,7 @@ impl PdfCache {
         tracing::debug!("PDF temp dir: {}", dir.path().display());
         Ok(Self {
             dir,
-            dpi: 600,
+            dpi: 200,
             counter: 0,
         })
     }

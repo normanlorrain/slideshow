@@ -570,7 +570,7 @@ Recorded after running the spikes on this machine (2026-07-08). Environment note
 | Images | **`image` 0.25** | Loads JPEG/PNG/BMP used in `tests/`; resize with `FilterType::Triangle` (bilinear stand-in for pygame smoothscale) |
 | EXIF | **`kamadak-exif` 0.6** | Reads `Orientation` + `DateTimeOriginal`; works on sample paintings (dates present). Apply pygame-compatible CCW rotations: tag 3→180°, 6→270°, 8→90° |
 | Display | **`sdl2` 0.37** | Product backend (fullscreen, event pump, textures). Requires `libsdl2-dev`. Images as RGBA textures; text via `fontdue` (no SDL_ttf link required) |
-| PDF | **`pdfium-render` 0.9** + runtime `libpdfium.so` | In-process; 600 DPI; temp PNG cache unchanged. Bind via `PDFIUM_LIB_PATH` / next to binary / `~/.local/pdfium/lib` |
+| PDF | **`pdfium-render` 0.9** + runtime `libpdfium.so` | In-process; **200 DPI** default (screen); temp PNG cache. Bind via `PDFIUM_LIB_PATH` / next to binary / `~/.local/pdfium/lib` |
 | Temp files | **`tempfile`** | PDF page cache + spike outputs |
 | Signals | **`signal-hook`** | Phase 3+; Unix `SIGUSR1` only |
 | Walk dirs | **`walkdir`** | Phase 1 album discovery |
