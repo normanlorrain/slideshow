@@ -1,0 +1,41 @@
+[package]
+name = "magic-lantern"
+version = "0.1.0"
+edition = "2021"
+description = "A presentation tool for kiosks, digital signage, slide shows (Rust port)."
+license = "MIT"
+readme = "README.md"
+repository = "https://github.com/normanlorrain/magic-lantern"
+authors = ["Norman Lorrain <normanlorrain@gmail.com>"]
+
+# Keep the Rust sources under rs/ so they do not collide with the Python
+# package layout at src/magic_lantern/.
+[[bin]]
+name = "magic-lantern"
+path = "rs/src/main.rs"
+
+[[example]]
+name = "spike_exif"
+path = "rs/examples/spike_exif.rs"
+
+[[example]]
+name = "spike_pdf"
+path = "rs/examples/spike_pdf.rs"
+
+[[example]]
+name = "spike_display"
+path = "rs/examples/spike_display.rs"
+
+[dependencies]
+# Image load / scale (JPEG, PNG, BMP)
+image = "0.25"
+# EXIF orientation + DateTimeOriginal
+kamadak-exif = "0.6"
+# Temporary files for PDF page rasters
+tempfile = "3"
+# Simple window for Phase 0 display spike (no system SDL headers required)
+minifb = "0.28"
+
+[profile.release]
+lto = true
+codegen-units = 1

@@ -305,12 +305,20 @@ Implement and test these carefully; they define “same app”:
 
 ## 8. Implementation phases
 
-### Phase 0 — Spike (1–3 days)
+### Phase 0 — Spike (1–3 days) ✅ done
 
-- [ ] SDL2 window: fullscreen, blit scaled image, keyboard quit.
-- [ ] EXIF orientation on a sample JPEG from `tests/images/`.
-- [ ] PDF: convert one page of `tests/pdfs/Example presentation.pdf` to PNG.
-- [ ] Decision record: final crate set for graphics + PDF.
+- [x] Window + blit scaled image + keyboard quit (`rs/examples/spike_display.rs`, via `minifb`).
+- [x] EXIF orientation / DateTimeOriginal on test images (`rs/examples/spike_exif.rs`).
+- [x] PDF: convert page 0 of `tests/pdfs/Example presentation.pdf` to PNG (`rs/examples/spike_pdf.rs`).
+- [x] Decision record: final crate set for graphics + PDF (see §18 below).
+
+**Run the spikes** (from repo root):
+
+```bash
+cargo run --example spike_exif
+cargo run --example spike_pdf
+cargo run --example spike_display
+```
 
 ### Phase 1 — Core non-UI (parity unit tests)
 
@@ -481,4 +489,60 @@ Overall surface area is **small (~1k LOC)**; the port is dominated by **dependen
 
 ## 17. Next concrete step
 
-Create the Rust crate skeleton on this branch (`cargo init --bin`), implement Phase 1 config + album + dry-run against `tests/`, and freeze graphics/PDF crate choices after the Phase 0 spike.
+Phase 0 is complete (scaffold + spikes + decisions below). **Next: Phase 1** — config, album discovery, slideshow generator, dry-run path, with unit tests against `tests/`.
+
+---
+
+## 18. Phase 0 decision record
+
+Recorded after running the spikes on this machine (2026-07-08). Environment notes: `libsdl2-2.0-0` runtime present, **`libsdl2-dev` not installed** (no sudo); `poppler-utils` (`pdftoppm`) available; `DISPLAY=:0` available.
+
+### 18.1 Layout
+
+| Choice | Decision |
+|--------|----------|
+| Crate location | Repo-root `Cargo.toml`; Rust sources under **`rs/`** so they do not collide with Python `src/magic_lantern/` |
+| Binary name | `magic-lantern` (preserves `pkill -USR1 magic-lantern`) |
+| Package version | Start at `0.1.0` until feature parity with Python `0.0.20` |
+
+### 18.2 Crate set (locked in for the port)
+
+| Concern | Crate / tool | Rationale |
+|---------|--------------|-----------|
+| CLI | **`clap`** (derive) | Phase 1+; not needed for spikes |
+| Config | **`toml` + `serde`** | Phase 1+ |
+| Errors | **`thiserror` + `anyhow`** | Phase 1+ |
+| Logging | **`tracing` + `tracing-subscriber` + `tracing-appender`** | Phase 1+ |
+| Random | **`rand`** | Phase 1 slideshow weights |
+| Images | **`image` 0.25** | Loads JPEG/PNG/BMP used in `tests/`; resize with `FilterType::Triangle` (bilinear stand-in for pygame smoothscale) |
+| EXIF | **`kamadak-exif` 0.6** | Reads `Orientation` + `DateTimeOriginal`; works on sample paintings (dates present). Apply pygame-compatible CCW rotations: tag 3→180°, 6→270°, 8→90° |
+| Display (spike) | **`minifb` 0.28** | Proved 1280×720 window, letterbox blit, quit on `q`/Esc **without** SDL headers |
+| Display (product) | **`sdl2`** with features `image`, `ttf` | Still the production target for pygame parity (fullscreen, fonts, timers, key repeat). Requires `libsdl2-dev`, `libsdl2-image-dev`, `libsdl2-ttf-dev` at build time. Fall back to minifb-only path only if packaging SDL is unacceptable |
+| PDF (spike) | **`pdftoppm`** (Poppler CLI) | Page 0 @ 600 DPI → PNG `4410×2481` for `Example presentation.pdf`; zero extra Rust deps |
+| PDF (product) | **Prefer in-process `pdfium-render`**, fallback **subprocess `pdftoppm`** | Avoid system MuPDF `-dev` dependency; PDFium is widely used and license-friendly for distribution. Keep tempfile-per-page cache like Python. If `pdfium-render` integration is painful, ship the Poppler CLI fallback behind a feature flag `pdf-poppler` |
+| Temp files | **`tempfile`** | PDF page cache + spike outputs |
+| Signals | **`signal-hook`** | Phase 3+; Unix `SIGUSR1` only |
+| Walk dirs | **`walkdir`** | Phase 1 album discovery |
+
+### 18.3 Spike results
+
+| Spike | Result |
+|-------|--------|
+| `spike_exif` | All `tests/images/**` load via `image`. Paintings expose `DateTimeOriginal`; no orientation tags in current fixtures (code path for 3/6/8 still implemented). Thumbnail written to `/tmp/magic-lantern-spike-exif.png`. |
+| `spike_pdf` | `pdftoppm -png -r 600 -singlefile` succeeded; output `/tmp/magic-lantern-spike-pdf.png`. |
+| `spike_display` | Window opened, image fitted (e.g. rembrandt 689×899 → 552×720 at offset (364,0)), quit on key works. |
+
+### 18.4 Open follow-ups (not blocking Phase 1)
+
+1. Install SDL2 **dev** packages on build hosts and add a gated `spike_sdl2` example before Phase 3.
+2. Spike `pdfium-render` (download/link) before implementing production `pdf.rs`.
+3. Port pygame `Rect.fit` exactly (unit tests) — current fit math is aspect-correct letterbox, not yet line-for-line.
+4. Test images lack orientation tags 3/6/8; add a fixture or synthetic EXIF sample in Phase 2 tests.
+
+### 18.5 Dependency footprint (Phase 0 Cargo.toml)
+
+Only what the spikes need today:
+
+- `image`, `kamadak-exif`, `tempfile`, `minifb`
+
+Phase 1 will add `clap`, `serde`, `toml`, `rand`, `thiserror`, `anyhow`, `tracing*`, `walkdir` without pulling SDL/PDF into the default build until later phases.
