@@ -33,13 +33,14 @@ The Rust port (see branch `rust` / [rust.md](rust.md)) builds a binary also name
 
 ```bash
 # toolchain: rustup or distro cargo/rustc
-sudo apt install libsdl2-dev poppler-utils fonts-freefont-ttf   # display + PDF + overlays
+sudo apt install libsdl2-dev fonts-freefont-ttf   # display + overlays
+# PDF: install libpdfium (see docs/build_rust.md) — e.g. place libpdfium.so next to the binary
 cargo build --release
 sudo install -m 755 target/release/magic-lantern /usr/local/bin/
 # or: cargo install --path .
 ```
 
-Full dependency list, release profile notes, and packaging tips: [docs/build_rust.md](docs/build_rust.md).
+Full dependency list (SDL2, **PDFium**), release profile notes: [docs/build_rust.md](docs/build_rust.md).
 
 ## Usage
 

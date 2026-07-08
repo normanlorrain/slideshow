@@ -377,7 +377,7 @@ Display backend is **SDL2** (`libsdl2-dev` at build time). Text overlays still u
 - [x] Release profile (`lto`, `strip`, `panic = abort`) + `release-with-debug`.
 - [x] Document build deps and packaging: [docs/build_rust.md](docs/build_rust.md), README Rust section, root `Makefile`.
 
-**Note:** Runtime display is **SDL2**. PDF needs **`poppler-utils`** (`pdftoppm`).
+**Note:** Runtime display is **SDL2**. PDF uses **PDFium** (`pdfium-render` + `libpdfium.so` at runtime).
 
 ```bash
 make release          # target/release/magic-lantern
@@ -513,7 +513,7 @@ Each PR should leave `cargo test` and dry-run usable.
 - [x] `docs/example.toml` semantics work with `tests/` assets (`tests/kiosk.toml`).
 - [x] Keyboard controls: space, q, n/p, arrows, y.
 - [x] History previous/next with memory unload.
-- [x] PDF pages appear as slides (`pdftoppm`).
+- [x] PDF pages appear as slides (`pdfium-render` / PDFium).
 - [x] EXIF orientation and year/date overlays.
 - [x] Unix `SIGUSR1` reloads config.
 - [x] Dry-run mode without opening a window.
@@ -542,7 +542,7 @@ Overall surface area is **small (~1k LOC)**; the port is dominated by **dependen
 
 ## 17. Next concrete step
 
-Phases 0–5 are complete; display backend is **SDL2**. Remaining optional work: in-process PDFium, Python package deprecation, packaging artifacts.
+Phases 0–5 are complete; display is **SDL2**, PDF is **PDFium**. Remaining optional work: Python deprecation, packaging artifacts.
 
 ---
 
@@ -570,8 +570,7 @@ Recorded after running the spikes on this machine (2026-07-08). Environment note
 | Images | **`image` 0.25** | Loads JPEG/PNG/BMP used in `tests/`; resize with `FilterType::Triangle` (bilinear stand-in for pygame smoothscale) |
 | EXIF | **`kamadak-exif` 0.6** | Reads `Orientation` + `DateTimeOriginal`; works on sample paintings (dates present). Apply pygame-compatible CCW rotations: tag 3→180°, 6→270°, 8→90° |
 | Display | **`sdl2` 0.37** | Product backend (fullscreen, event pump, textures). Requires `libsdl2-dev`. Images as RGBA textures; text via `fontdue` (no SDL_ttf link required) |
-| PDF (spike) | **`pdftoppm`** (Poppler CLI) | Page 0 @ 600 DPI → PNG `4410×2481` for `Example presentation.pdf`; zero extra Rust deps |
-| PDF (product) | **Prefer in-process `pdfium-render`**, fallback **subprocess `pdftoppm`** | Avoid system MuPDF `-dev` dependency; PDFium is widely used and license-friendly for distribution. Keep tempfile-per-page cache like Python. If `pdfium-render` integration is painful, ship the Poppler CLI fallback behind a feature flag `pdf-poppler` |
+| PDF | **`pdfium-render` 0.9** + runtime `libpdfium.so` | In-process; 600 DPI; temp PNG cache unchanged. Bind via `PDFIUM_LIB_PATH` / next to binary / `~/.local/pdfium/lib` |
 | Temp files | **`tempfile`** | PDF page cache + spike outputs |
 | Signals | **`signal-hook`** | Phase 3+; Unix `SIGUSR1` only |
 | Walk dirs | **`walkdir`** | Phase 1 album discovery |
@@ -587,7 +586,7 @@ Recorded after running the spikes on this machine (2026-07-08). Environment note
 ### 18.4 Open follow-ups (not blocking Phase 1)
 
 1. Install SDL2 **dev** packages on build hosts and add a gated `spike_sdl2` example before Phase 3.
-2. Spike `pdfium-render` (download/link) before implementing production `pdf.rs`.
+2. ~~Spike pdfium-render~~ done — production path uses PDFium.
 3. Port pygame `Rect.fit` exactly (unit tests) — current fit math is aspect-correct letterbox, not yet line-for-line.
 4. Test images lack orientation tags 3/6/8; add a fixture or synthetic EXIF sample in Phase 2 tests.
 

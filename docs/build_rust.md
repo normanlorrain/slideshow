@@ -33,16 +33,47 @@ source "$HOME/.cargo/env"
 
 ### Runtime features
 
-| Feature | Debian packages | Notes |
-|---------|-----------------|-------|
-| **PDF slides** | `poppler-utils` | Provides `pdftoppm` (used to rasterize PDF pages at 600 DPI) |
-| **Text overlays** | fonts with a sans-bold face | Tries FreeSans Bold, DejaVu Sans Bold, Liberation Sans Bold, Ubuntu Bold |
+| Feature | Requirement | Notes |
+|---------|-------------|-------|
+| **PDF slides** | **PDFium** shared library (`libpdfium.so`) | In-process via `pdfium-render` at **600 DPI** |
+| **Text overlays** | fonts with a sans-bold face | FreeSans Bold, DejaVu Sans Bold, etc. |
 | **Images** | none extra | JPEG/PNG/BMP via pure-Rust `image` crate |
 
 ```bash
-sudo apt install poppler-utils \
-  fonts-freefont-ttf fonts-dejavu-core fonts-liberation
+sudo apt install fonts-freefont-ttf fonts-dejavu-core fonts-liberation
+# PDFium is not in Ubuntu main — install manually (below)
 ```
+
+#### PDFium library
+
+Pdfium is **not** linked at compile time; the binary loads it at runtime.
+
+**Option A — next to the executable** (simplest for a single machine):
+
+```bash
+# Download prebuilt binaries (example: Linux x86_64)
+curl -sL -o /tmp/pdfium.tgz \
+  https://github.com/bblanchon/pdfium-binaries/releases/download/chromium/7934/pdfium-linux-x64.tgz
+mkdir -p "$HOME/.local/pdfium" && tar -xzf /tmp/pdfium.tgz -C "$HOME/.local/pdfium"
+# Either copy next to the binary:
+cp "$HOME/.local/pdfium/lib/libpdfium.so" target/release/
+# Or point at it:
+export PDFIUM_LIB_PATH="$HOME/.local/pdfium/lib/libpdfium.so"
+# Or directory form:
+export MAGIC_LANTERN_PDFIUM_DIR="$HOME/.local/pdfium/lib"
+```
+
+**Search order** at runtime:
+
+1. `PDFIUM_LIB_PATH` (file or directory)
+2. Directory of the `magic-lantern` executable
+3. `MAGIC_LANTERN_PDFIUM_DIR`
+4. `~/.local/pdfium/lib`
+5. System library path
+
+**Option B — system package** (if your distro ships `libpdfium`): install it and rely on step 5.
+
+You no longer need `poppler-utils` / `pdftoppm` for this Rust port.
 
 ### Display (SDL2)
 
@@ -130,7 +161,7 @@ Fully static Linux binaries are **not** the default. SDL2 is linked dynamically.
 
 - Prefer distro packages + `cargo build --release` on the target machine or matching glibc.
 - Cross-compiling musl static builds with SDL2 is non-trivial; not supported out of the box.
-- PDF conversion shells out to `pdftoppm` (dynamic system tool), so a “static” binary still needs Poppler at runtime for PDFs.
+- PDF conversion loads **PDFium** dynamically (`libpdfium.so`); ship that library next to the binary or set `PDFIUM_LIB_PATH`.
 
 ---
 

@@ -1,62 +1,16 @@
-//! Phase 0 spike: rasterize page 0 of a PDF to PNG.
+//! PDF spike using PDFium (same backend as the main app).
 //!
-//! Strategy A (this spike): shell out to Poppler's `pdftoppm` (already on many
-//! Linux desktops; present in this environment via `poppler-utils`).
-//!
-//! Strategy B (decision target): in-process library — see rust.md Phase 0 notes.
-//!
-//! Usage (from repo root):
+//! Usage (from repo root; needs libpdfium — see docs/build_rust.md):
 //!   cargo run --example spike_pdf
-//!   cargo run --example spike_pdf -- path/to/file.pdf
+//!   PDFIUM_LIB_PATH=$HOME/.local/pdfium/lib/libpdfium.so cargo run --example spike_pdf
 
 use std::env;
-use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::path::PathBuf;
+
+use magic_lantern::pdf::{pdf_available, PdfCache};
 
 fn default_sample() -> PathBuf {
     PathBuf::from("tests/pdfs/Example presentation.pdf")
-}
-
-fn which(cmd: &str) -> Option<PathBuf> {
-    env::var_os("PATH").and_then(|paths| {
-        env::split_paths(&paths).find_map(|dir| {
-            let p = dir.join(cmd);
-            p.is_file().then_some(p)
-        })
-    })
-}
-
-/// Rasterize first page at ~600 DPI (matches Python pymupdf `get_pixmap(dpi=600)`).
-fn convert_page0_pdftoppm(pdf: &Path, out_prefix: &Path) -> Result<PathBuf, String> {
-    let pdftoppm = which("pdftoppm").ok_or_else(|| {
-        "pdftoppm not found on PATH (install poppler-utils)".to_string()
-    })?;
-
-    let status = Command::new(&pdftoppm)
-        .args([
-            "-png",
-            "-r",
-            "600",
-            "-f",
-            "1",
-            "-l",
-            "1",
-            "-singlefile",
-        ])
-        .arg(pdf)
-        .arg(out_prefix)
-        .status()
-        .map_err(|e| format!("failed to spawn pdftoppm: {e}"))?;
-
-    if !status.success() {
-        return Err(format!("pdftoppm exited with {status}"));
-    }
-
-    let png = out_prefix.with_extension("png");
-    if !png.is_file() {
-        return Err(format!("expected output missing: {}", png.display()));
-    }
-    Ok(png)
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -65,34 +19,35 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .map(PathBuf::from)
         .unwrap_or_else(default_sample);
 
-    println!("=== spike_pdf ===");
+    println!("=== spike_pdf (PDFium) ===");
     println!("pdf: {}", pdf.display());
 
     if !pdf.exists() {
         eprintln!("File not found: {}", pdf.display());
-        eprintln!("Run from the repository root.");
+        std::process::exit(1);
+    }
+    if !pdf_available() {
+        eprintln!(
+            "PDFium library not found.\n\
+             Set PDFIUM_LIB_PATH or place libpdfium.so next to the binary.\n\
+             See docs/build_rust.md."
+        );
         std::process::exit(1);
     }
 
-    if let Some(p) = which("pdftoppm") {
-        println!("pdftoppm: {}", p.display());
-    } else {
-        eprintln!("pdftoppm not found — cannot complete PDF spike.");
-        std::process::exit(1);
+    let mut cache = PdfCache::with_dpi(150)?;
+    let pages = cache.convert(&pdf)?;
+    println!("pages: {}", pages.len());
+    for (i, p) in pages.iter().enumerate() {
+        let (w, h) = image::image_dimensions(p)?;
+        println!("  [{i}] {} ({} x {})", p.display(), w, h);
     }
 
-    let tmp = tempfile::tempdir()?;
-    let prefix = tmp.path().join("page0");
-    let png = convert_page0_pdftoppm(&pdf, &prefix).map_err(|e| {
-        std::io::Error::other(e)
-    })?;
-
-    let meta = image::image_dimensions(&png)?;
-    println!("raster: {} ({} x {})", png.display(), meta.0, meta.1);
-
-    let dest = PathBuf::from("/tmp/magic-lantern-spike-pdf.png");
-    std::fs::copy(&png, &dest)?;
-    println!("persisted: {}", dest.display());
+    if let Some(first) = pages.first() {
+        let dest = PathBuf::from("/tmp/magic-lantern-spike-pdf.png");
+        std::fs::copy(first, &dest)?;
+        println!("persisted first page: {}", dest.display());
+    }
     println!("OK");
     Ok(())
 }

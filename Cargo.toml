@@ -62,6 +62,8 @@ image = "0.25"
 kamadak-exif = "0.6"
 # Temporary files for PDF page rasters
 tempfile = "3"
+# PDF → bitmap (in-process; needs libpdfium.so at runtime — see docs/build_rust.md)
+pdfium-render = { version = "0.9", default-features = true }
 # Display / events (pygame-equivalent backend)
 sdl2 = { version = "0.37", default-features = true, features = ["unsafe_textures"] }
 # Text overlays (system TTF rasterized to RGBA, then SDL textures)
