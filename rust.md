@@ -352,11 +352,23 @@ cargo test
 # load/unload + fit covered by slide:: and rect:: unit tests
 ```
 
-### Phase 3 — Controller / UI
+### Phase 3 — Controller / UI ✅ done
 
-- [ ] Event loop: timer, pause, year, next, previous.
-- [ ] Text overlays (system sans-serif, two sizes, green).
-- [ ] `SIGUSR1` reload loop around config + controller.
+- [x] Event loop: timer, pause, year, next, previous (`rs/src/controller.rs`, `screen.rs`).
+- [x] Text overlays: system sans-bold via fontdue, sizes 36/72, green `(46,176,80)`.
+- [x] `SIGUSR1` reload loop (`signal_handler.rs` + outer loop in `main.rs`).
+
+**Run:**
+
+```bash
+cargo run -- --interval 3 tests/images/paintings
+# keys: space pause, q quit, n/→ next, p/← previous, y year
+# reload: pkill -USR1 magic-lantern
+# CI smoke (auto-close window):
+MAGIC_LANTERN_AUTO_QUIT_SECS=2 cargo run -- --interval 1 tests/images/paintings
+```
+
+Display backend is **minifb** (no `libsdl2-dev` required). SDL2 remains the longer-term target.
 
 ### Phase 4 — CLI polish & packaging
 
@@ -508,7 +520,7 @@ Overall surface area is **small (~1k LOC)**; the port is dominated by **dependen
 
 ## 17. Next concrete step
 
-Phases 0–2 are complete. **Next: Phase 3** — controller / UI (event loop, overlays, SIGUSR1 reload).
+Phases 0–3 are complete. **Next: Phase 4** — CLI polish & packaging docs (or Phase 5 validation).
 
 ---
 

@@ -27,6 +27,10 @@ pub enum Error {
     /// Bad or unreadable slide file (Python `SlideException`).
     #[error("bad slide file: {0}")]
     Slide(PathBuf),
+
+    /// Display / window / font error.
+    #[error("display error: {0}")]
+    Display(String),
 }
 
 pub type Result<T> = std::result::Result<T, Error>;

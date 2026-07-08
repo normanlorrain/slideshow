@@ -1,7 +1,6 @@
 //! magic-lantern — Rust port CLI.
 //!
-//! Phase 1: configuration, album discovery, slideshow, dry-run.
-//! Full UI arrives in later phases (see rust.md).
+//! Phases 0–3: config, slideshow, slide pipeline, controller/UI, SIGUSR1 reload.
 
 use std::path::PathBuf;
 use std::process::ExitCode;
@@ -9,9 +8,9 @@ use std::process::ExitCode;
 use clap::Parser;
 
 use magic_lantern::config::{CliOverrides, Config};
+use magic_lantern::controller::{self, Controller};
 use magic_lantern::error::Error;
 use magic_lantern::log_setup;
-use magic_lantern::slideshow::{self, Slideshow};
 
 /// A slide show generator. Specify a directory containing image files
 /// or use -c to specify a config file.
@@ -19,7 +18,7 @@ use magic_lantern::slideshow::{self, Slideshow};
 #[command(
     name = "magic-lantern",
     version,
-    after_help = "To reload the configuration, send it the USR1 signal:\n\n    pkill -USR1 magic-lantern\n\nSee https://github.com/normanlorrain/magic-lantern for more details."
+    after_help = "To reload the configuration, send it the USR1 signal:\n\n    pkill -USR1 magic-lantern\n\nKeys while running: space pause, q quit, n/→ next, p/← previous, y year.\n\nSee https://github.com/normanlorrain/magic-lantern for more details."
 )]
 struct Cli {
     /// Configuration file.
@@ -70,49 +69,53 @@ fn run() -> Result<(), Error> {
     log_setup::init();
 
     let overrides = CliOverrides::from(&cli);
-    let config = Config::from_cli(&overrides)?;
 
-    if let Some(n) = config.dry_run {
-        // Seed 0 by default; allow override for reproducibility.
-        let seed = std::env::var("MAGIC_LANTERN_SEED")
-            .ok()
-            .and_then(|s| s.parse().ok())
-            .unwrap_or(0);
-        let mut show = Slideshow::new(&config, seed)?;
-        slideshow::dry_run(&mut show, n)?;
-        return Ok(());
+    // Outer reload loop (Python cli.py `while runState`).
+    loop {
+        let config = Config::from_cli(&overrides)?;
+
+        if config.directory.is_some() {
+            tracing::info!(
+                "Single directory slide show: {}",
+                config.directory.as_ref().unwrap().display()
+            );
+        }
+
+        let should_reload = if config.dry_run.is_some() {
+            controller::dry_run(&config)?
+        } else {
+            let mut ctl = Controller::new(config)?;
+            ctl.run()?
+        };
+
+        if !should_reload {
+            break;
+        }
+        tracing::info!("Reloading configuration and slideshow…");
     }
 
-    // Phase 1: UI not yet implemented.
-    anyhow_ui_not_ready(&config)
-}
-
-fn anyhow_ui_not_ready(config: &Config) -> Result<(), Error> {
-    let albums = config.albums.len();
-    let msg = format!(
-        "UI not implemented yet (Phase 1 is dry-run only).\n\
-         Loaded {albums} album(s); fullscreen={} shuffle={} interval={}s.\n\
-         Use --dry-run N to list slides, e.g.:\n\
-           magic-lantern -c tests/example\\ 1.toml --dry-run 10",
-        config.fullscreen, config.shuffle, config.interval
-    );
-    Err(Error::Slideshow(msg))
+    Ok(())
 }
 
 fn main() -> ExitCode {
     match run() {
-        Ok(()) => ExitCode::SUCCESS,
+        Ok(()) => {
+            tracing::info!("Application ended normally");
+            ExitCode::SUCCESS
+        }
         Err(Error::Config(msg)) => {
             eprintln!("Error: {msg}");
+            tracing::error!("Error: {msg}");
             ExitCode::from(1)
         }
         Err(Error::Slideshow(msg)) => {
-            // UI-not-ready is informational on stderr with non-zero so scripts notice.
-            eprintln!("{msg}");
-            ExitCode::from(2)
+            eprintln!("Error: {msg}");
+            tracing::error!("Error: {msg}");
+            ExitCode::from(1)
         }
         Err(e) => {
             eprintln!("Error: {e}");
+            tracing::error!("{e}");
             ExitCode::from(1)
         }
     }
