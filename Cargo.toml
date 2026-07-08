@@ -10,6 +10,10 @@ authors = ["Norman Lorrain <normanlorrain@gmail.com>"]
 
 # Keep the Rust sources under rs/ so they do not collide with the Python
 # package layout at src/magic_lantern/.
+[lib]
+name = "magic_lantern"
+path = "rs/src/lib.rs"
+
 [[bin]]
 name = "magic-lantern"
 path = "rs/src/main.rs"
@@ -27,7 +31,22 @@ name = "spike_display"
 path = "rs/examples/spike_display.rs"
 
 [dependencies]
-# Image load / scale (JPEG, PNG, BMP)
+# CLI
+clap = { version = "4", features = ["derive"] }
+# Config
+serde = { version = "1", features = ["derive"] }
+toml = "0.8"
+# Errors
+thiserror = "2"
+anyhow = "1"
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+# Random (slideshow weights / album shuffle)
+rand = "0.8"
+# Directory walk
+walkdir = "2"
+# Image load / scale (JPEG, PNG, BMP) — used by Phase 0 spikes; later phases
 image = "0.25"
 # EXIF orientation + DateTimeOriginal
 kamadak-exif = "0.6"
@@ -35,6 +54,9 @@ kamadak-exif = "0.6"
 tempfile = "3"
 # Simple window for Phase 0 display spike (no system SDL headers required)
 minifb = "0.28"
+
+[dev-dependencies]
+# none beyond std for now
 
 [profile.release]
 lto = true

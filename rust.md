@@ -320,12 +320,24 @@ cargo run --example spike_pdf
 cargo run --example spike_display
 ```
 
-### Phase 1 — Core non-UI (parity unit tests)
+### Phase 1 — Core non-UI (parity unit tests) ✅ done
 
-- [ ] `config`: load `docs/example.toml` + CLI merge; reject `tests/bad.toml`.
-- [ ] `album`: walk `tests/images/*`, exclude dirs, PDF expansion, order modes.
-- [ ] `slideshow`: deterministic tests with fixed RNG seed for weights/shuffle.
-- [ ] Dry-run path prints same style as Python.
+- [x] `config`: load `docs/example.toml` + CLI merge; reject `tests/bad.toml`.
+- [x] `album`: walk `tests/images/*`, exclude dirs, PDF expansion, order modes.
+- [x] `slideshow`: deterministic tests with fixed RNG seed for weights/shuffle.
+- [x] Dry-run path prints same style as Python.
+
+**Run:**
+
+```bash
+cargo test
+cargo run -- --dry-run 10 tests/images/numbers
+cargo run -- -c "tests/example 1.toml" --dry-run 12
+# optional reproducible sequence:
+MAGIC_LANTERN_SEED=1 cargo run -- -c "tests/example 1.toml" --dry-run 12
+```
+
+UI mode without `--dry-run` exits with a clear “not implemented yet” message until Phase 3.
 
 ### Phase 2 — Slide pipeline
 
@@ -489,7 +501,7 @@ Overall surface area is **small (~1k LOC)**; the port is dominated by **dependen
 
 ## 17. Next concrete step
 
-Phase 0 is complete (scaffold + spikes + decisions below). **Next: Phase 1** — config, album discovery, slideshow generator, dry-run path, with unit tests against `tests/`.
+Phases 0–1 are complete. **Next: Phase 2** — slide pipeline (lazy load/unload, EXIF, fit-to-screen math, PDF temp lifecycle integration with slides).
 
 ---
 
