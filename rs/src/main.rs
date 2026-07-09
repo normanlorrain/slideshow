@@ -1,6 +1,6 @@
 //! magic-lantern — Rust port CLI.
 //!
-//! Binary name is `magic-lantern` so `pkill -USR1 magic-lantern` matches Python.
+//! Binary name is `magic-lantern` so `pkill -USR1 magic-lantern` reloads the app.
 
 use std::path::PathBuf;
 use std::process::ExitCode;

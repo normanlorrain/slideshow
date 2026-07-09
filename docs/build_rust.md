@@ -1,6 +1,6 @@
-# Building magic-lantern (Rust)
+# Building magic-lantern
 
-The Rust port lives alongside the Python package on the `rust` branch. Sources are under `rs/`; the Cargo package root is the repository root.
+Sources are under `rs/`; the Cargo package root is the repository root.
 
 The installed / release **binary name is `magic-lantern`**, so reload still works:
 
@@ -17,8 +17,8 @@ pkill -USR1 magic-lantern
 | Package / tool | Why |
 |----------------|-----|
 | `build-essential` / `rustc` + `cargo` | Compile the project (Rust 1.70+ recommended; CI uses stable) |
-| A C toolchain (`gcc`, `pkg-config`) | Native deps of crates such as `minifb` |
-| X11 or Wayland session | Windowed UI (`minifb`) |
+| A C toolchain (`gcc`, `pkg-config`) | Native deps (SDL2 build/link) |
+| X11 or Wayland session | Windowed UI (SDL2) |
 
 Install a toolchain (pick one):
 
@@ -184,7 +184,7 @@ Fully static Linux binaries are **not** the default. SDL2 is linked dynamically.
 
 ---
 
-## CLI parity (Python README)
+## CLI flags
 
 | Flag | Meaning |
 |------|---------|
@@ -202,23 +202,10 @@ Fully static Linux binaries are **not** the default. SDL2 is linked dynamically.
 
 ## Autostart / kiosk
 
-Same pattern as the Python app: point GNOME autostart (or a systemd user unit) at the **binary path**. Only the path changes from the pipx script to e.g. `/usr/local/bin/magic-lantern` or `~/.cargo/bin/magic-lantern`.
+Point GNOME autostart (or a systemd user unit) at the binary, e.g. `/usr/local/bin/magic-lantern` or `~/.cargo/bin/magic-lantern`.
 
 Reload after editing the TOML or image folders:
 
 ```bash
 pkill -USR1 magic-lantern
 ```
-
----
-
-## Coexistence with Python
-
-| | Python | Rust |
-|--|--------|------|
-| Install | `pipx install magic-lantern` | `cargo install --path .` |
-| Package layout | `src/magic_lantern/` | `rs/` + root `Cargo.toml` |
-| Config TOML | same schema | same schema |
-| Binary name | `magic-lantern` | `magic-lantern` |
-
-Do not install both into the same `PATH` entry without renaming one; the last install wins for the name `magic-lantern`.

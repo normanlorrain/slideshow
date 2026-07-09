@@ -2,7 +2,7 @@
 name = "magic-lantern"
 version = "0.1.0"
 edition = "2021"
-description = "A presentation tool for kiosks, digital signage, slide shows (Rust port)."
+description = "A presentation tool for kiosks, digital signage, slide shows."
 license = "MIT"
 readme = "README.md"
 repository = "https://github.com/normanlorrain/magic-lantern"
@@ -10,15 +10,13 @@ homepage = "https://github.com/normanlorrain/magic-lantern"
 authors = ["Norman Lorrain <normanlorrain@gmail.com>"]
 keywords = ["slideshow", "kiosk", "digital-signage", "images"]
 categories = ["multimedia", "command-line-utilities"]
-# Dual-layout: Python package remains under src/magic_lantern/; Rust under rs/.
 exclude = [
     "tests/images/**",
     "tests/pdfs/**",
     "*.log",
 ]
 
-# Keep the Rust sources under rs/ so they do not collide with the Python
-# package layout at src/magic_lantern/.
+# Sources live under rs/ (library + binary entrypoints).
 [lib]
 name = "magic_lantern"
 path = "rs/src/lib.rs"
@@ -51,7 +49,7 @@ kamadak-exif = "0.6"
 tempfile = "3"
 # PDF → bitmap (in-process; needs libpdfium.so at runtime — see docs/build_rust.md)
 pdfium-render = { version = "0.9", default-features = true }
-# Display / events (pygame-equivalent backend)
+# Display / events
 sdl2 = { version = "0.37", default-features = true, features = ["unsafe_textures"] }
 # Text overlays (system TTF rasterized to RGBA, then SDL textures)
 fontdue = "0.9"

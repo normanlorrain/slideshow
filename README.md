@@ -9,27 +9,7 @@ You can specify a single directory/folder for the images, or organise them into 
 
 ## Installation
 
-### Python (pipx)
-
-#### Windows
-
-[pipx](https://pipx.pypa.io/stable/), via [Scoop](https://scoop.sh/)
-
-```
-scoop install pipx
-pipx ensurepath
-pipx install magic-lantern
-```
-
-#### Debian
-
-```bash
-pipx install magic-lantern
-```
-
-### Rust (from source)
-
-The Rust port (see branch `rust` / [rust.md](rust.md)) builds a binary also named **`magic-lantern`**.
+Build from source (Rust). The binary is named **`magic-lantern`**.
 
 ```bash
 # toolchain: rustup or distro cargo/rustc
@@ -120,7 +100,7 @@ This is a list of keys, their scope, etc., defined in the configuration file:
 #### weight
 - *scope*: global and album
 - *type*: integer
-- *value*: give the weight to an album when choosing them randomly. When the slide show is generated, each image is taken from each album, chosen [randomly](https://docs.python.org/3/library/random.html#random.choices), according the the given weights.
+- *value*: give the weight to an album when choosing them randomly. When the slide show is generated, each image is taken from each album, chosen randomly according to the given weights.
 
 - *default*: 1
 

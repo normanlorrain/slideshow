@@ -1,6 +1,8 @@
 # Porting magic-lantern to Rust
 
-This document is a plan for reimplementing [magic-lantern](https://github.com/normanlorrain/magic-lantern) (Python) in Rust, based on analysis of the current codebase (`src/magic_lantern/`).
+> **Status:** The Rust implementation under `rs/` is the product. The former Python package (`src/magic_lantern/`, `pyproject.toml`) has been removed. This document remains as the historical port plan and decision record.
+
+This document planned reimplementing [magic-lantern](https://github.com/normanlorrain/magic-lantern) from Python to Rust, based on analysis of the former codebase (`src/magic_lantern/`).
 
 ---
 
@@ -477,12 +479,12 @@ Prefer **headless** tests for core; gate SDL tests behind `#[ignore]` or feature
 
 ## 13. Migration path for users
 
-1. Keep Python package published during port.
-2. Ship Rust binary as `magic-lantern` (or `magic-lantern-rs` until parity).
+1. ~~Keep Python package published during port.~~ Done — Python package removed.
+2. Ship Rust binary as `magic-lantern`.
 3. Config TOML **unchanged** — no schema break.
-4. Update README install section: cargo / deb / release tarball.
-5. Autostart units: swap binary path only.
-6. Deprecate Python when parity checklist is signed off.
+4. Update README install section: cargo / release binary.
+5. Autostart units: point at the Rust binary path.
+6. ~~Deprecate Python when parity checklist is signed off.~~ Done.
 
 ---
 
@@ -536,7 +538,7 @@ Overall surface area is **small (~1k LOC)**; the port is dominated by **dependen
 
 ## 17. Next concrete step
 
-Phases 0–5 are complete; display is **SDL2**, PDF is **PDFium**. Remaining optional work: Python deprecation, packaging artifacts.
+Phases 0–5 are complete; display is **SDL2**, PDF is **PDFium**. The Python package has been removed.
 
 ---
 

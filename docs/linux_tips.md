@@ -5,7 +5,8 @@
 ```
 sudo apt update
 sudo apt upgrade
-sudo apt install pipx openssh-server samba
+sudo apt install openssh-server samba
+# for building magic-lantern: libsdl2-dev fonts-freefont-ttf (see docs/build_rust.md)
 ```
 ## Ubuntu/Gnome
 
