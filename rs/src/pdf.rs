@@ -12,11 +12,13 @@
 
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
+use std::time::Instant;
 
 use pdfium_render::prelude::*;
 use tempfile::TempDir;
 
 use crate::error::{Error, Result};
+use crate::log_setup;
 
 /// Shared Pdfium binding for the process (library init is process-global).
 static PDFIUM: OnceLock<std::result::Result<Pdfium, String>> = OnceLock::new();
@@ -33,9 +35,14 @@ static PDFIUM_LOCK: Mutex<()> = Mutex::new(());
 /// 4. Common local install: `~/.local/pdfium/lib`
 /// 5. System library path (`Pdfium::bind_to_system_library`)
 pub fn bind_pdfium() -> Result<&'static Pdfium> {
+    let already = PDFIUM.get().is_some();
+    let t = Instant::now();
     let entry = PDFIUM.get_or_init(|| {
         try_bind_pdfium().map_err(|e| e.to_string())
     });
+    if !already {
+        log_setup::log_elapsed("PDFium bind (first time)", t);
+    }
     match entry {
         Ok(p) => Ok(p),
         Err(msg) => Err(Error::Pdf(msg.clone())),
@@ -169,16 +176,25 @@ impl PdfCache {
     /// Rasterize every page of `pdf_path` to PNG files; return their paths
     /// in page order. Names: `{fileName}-page-{n}.png` (0-based, Python style).
     pub fn convert(&mut self, pdf_path: &Path) -> Result<Vec<PathBuf>> {
-        let pdfium = bind_pdfium()?;
-        let _guard = PDFIUM_LOCK
-            .lock()
-            .unwrap_or_else(|e| e.into_inner());
-
-        self.counter += 1;
+        let total = Instant::now();
         let file_name = pdf_path
             .file_name()
             .and_then(|s| s.to_str())
             .unwrap_or("document.pdf");
+        tracing::debug!(
+            pdf = %pdf_path.display(),
+            dpi = self.dpi,
+            "PDF convert start"
+        );
+
+        let pdfium = bind_pdfium()?;
+        let t = Instant::now();
+        let _guard = PDFIUM_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        log_setup::log_elapsed("PDFium lock acquire", t);
+
+        self.counter += 1;
         let safe: String = file_name
             .chars()
             .map(|c| {
@@ -190,9 +206,11 @@ impl PdfCache {
             })
             .collect();
 
+        let t = Instant::now();
         let document = pdfium
             .load_pdf_from_file(pdf_path, None)
             .map_err(pdfium_err)?;
+        log_setup::log_elapsed(&format!("PDF open {file_name}"), t);
 
         // PDF points are 1/72"; scale to target DPI.
         let scale = self.dpi as f32 / 72.0;
@@ -200,11 +218,15 @@ impl PdfCache {
 
         let mut pages = Vec::new();
         for (index, page) in document.pages().iter().enumerate() {
+            let page_t = Instant::now();
+
+            let t = Instant::now();
             let image = page
                 .render_with_config(&render_config)
                 .map_err(pdfium_err)?
                 .as_image()
                 .map_err(pdfium_err)?;
+            log_setup::log_elapsed(&format!("PDF render page {index} ({file_name})"), t);
 
             let final_name = format!("{safe}-page-{index}.png");
             let mut dest = self.dir.path().join(&final_name);
@@ -215,10 +237,13 @@ impl PdfCache {
                 ));
             }
 
+            let t = Instant::now();
             image
                 .save(&dest)
                 .map_err(|e| Error::Pdf(format!("save PNG {}: {e}", dest.display())))?;
+            log_setup::log_elapsed(&format!("PDF save page {index} PNG"), t);
 
+            log_setup::log_elapsed(&format!("PDF page {index} total"), page_t);
             tracing::info!("    {}", dest.file_name().unwrap().to_string_lossy());
             pages.push(dest);
         }
@@ -229,6 +254,14 @@ impl PdfCache {
                 pdf_path.display()
             )));
         }
+        log_setup::log_elapsed(
+            &format!(
+                "PDF convert total {file_name} ({} pages @ {} DPI)",
+                pages.len(),
+                self.dpi
+            ),
+            total,
+        );
         Ok(pages)
     }
 }

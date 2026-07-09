@@ -14,11 +14,13 @@ use std::fs::File;
 use std::io::BufReader;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
+use std::time::Instant;
 
 use image::imageops::FilterType;
 use image::{DynamicImage, RgbaImage};
 
 use crate::error::{Error, Result};
+use crate::log_setup;
 use crate::rect::{default_screen_rect, Rect};
 
 /// One slide in an album / slideshow history (cheaply cloneable handle).
@@ -143,6 +145,10 @@ impl Slide {
 
     pub fn ensure_loaded(&self, screen: Rect) -> Result<()> {
         if self.inner.borrow().image_loaded {
+            tracing::debug!(
+                file = %self.filename(),
+                "slide already loaded (cache hit)"
+            );
             return Ok(());
         }
         self.load_image(screen)
@@ -150,18 +156,30 @@ impl Slide {
 
     pub fn load_image(&self, screen: Rect) -> Result<()> {
         let path = self.inner.borrow().path.clone();
-        tracing::debug!("{}", path.file_name().and_then(|s| s.to_str()).unwrap_or(""));
+        let name = path
+            .file_name()
+            .and_then(|s| s.to_str())
+            .unwrap_or("")
+            .to_string();
+        let total = Instant::now();
+        tracing::debug!(file = %name, path = %path.display(), "slide load start");
 
+        let t = Instant::now();
         let mut img = image::open(&path).map_err(|e| {
             tracing::warn!("failed to load {}: {e}", path.display());
             Error::Slide(path.clone())
         })?;
+        log_setup::log_elapsed(&format!("slide open/decode {name}"), t);
 
+        let t = Instant::now();
         let (exif_orientation, datetime) = read_exif_meta(&path);
+        log_setup::log_elapsed(&format!("slide EXIF read {name}"), t);
 
         if let Some(o) = exif_orientation {
-            tracing::debug!("EXIF orientation: {o}");
+            tracing::debug!(file = %name, orientation = o, "EXIF orientation");
+            let t = Instant::now();
             img = apply_orientation_pygame(img, o);
+            log_setup::log_elapsed(&format!("slide rotate {name}"), t);
         }
 
         let width = img.width();
@@ -174,9 +192,14 @@ impl Slide {
         let fw = fitted.w.max(1) as u32;
         let fh = fitted.h.max(1) as u32;
 
+        let t = Instant::now();
         let scaled = img
             .resize_exact(fw, fh, FilterType::Triangle)
             .to_rgba8();
+        log_setup::log_elapsed(
+            &format!("slide resize {name} {width}x{height} → {fw}x{fh}"),
+            t,
+        );
 
         {
             let mut b = self.inner.borrow_mut();
@@ -189,11 +212,14 @@ impl Slide {
             b.image_loaded = true;
         }
 
+        log_setup::log_elapsed(&format!("slide load total {name}"), total);
         tracing::info!(
-            "{} ({} x {})",
-            path.file_name().and_then(|s| s.to_str()).unwrap_or(""),
+            "{} ({} x {}) → fitted {}x{}",
+            name,
             width,
-            height
+            height,
+            fw,
+            fh
         );
         Ok(())
     }

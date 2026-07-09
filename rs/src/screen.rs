@@ -5,6 +5,8 @@
 //! Optional for other tools: `libsdl2-ttf-dev`, `libsdl2-image-dev`
 //! (this crate uploads RGBA via SDL textures; TTF is not required at link time).
 
+use std::time::Instant;
+
 use image::RgbaImage;
 use sdl2::pixels::PixelFormatEnum;
 use sdl2::rect::Rect as SdlRect;
@@ -14,6 +16,7 @@ use sdl2::Sdl;
 use sdl2::VideoSubsystem;
 
 use crate::error::{Error, Result};
+use crate::log_setup;
 use crate::rect::{DEFAULT_SCREEN_HEIGHT, DEFAULT_SCREEN_WIDTH, Rect};
 
 /// SDL2 display: canvas + texture creator for blitting slide/overlay images.
@@ -29,10 +32,18 @@ pub struct Screen {
 
 impl Screen {
     pub fn new(fullscreen: bool) -> Result<Self> {
+        let total = Instant::now();
+        tracing::debug!(fullscreen, "SDL screen init start");
+
+        let t = Instant::now();
         let sdl = sdl2::init().map_err(|e| Error::Display(format!("SDL init: {e}")))?;
+        log_setup::log_elapsed("SDL init", t);
+
+        let t = Instant::now();
         let video = sdl
             .video()
             .map_err(|e| Error::Display(format!("SDL video: {e}")))?;
+        log_setup::log_elapsed("SDL video subsystem", t);
 
         // Disable unused subsystems similar to pygame mixer/joystick quit.
         // (Audio/joystick not started by default with video-only use.)
@@ -47,16 +58,20 @@ impl Screen {
             builder.fullscreen_desktop();
         }
 
+        let t = Instant::now();
         let window = builder
             .build()
             .map_err(|e| Error::Display(format!("SDL window: {e}")))?;
+        log_setup::log_elapsed("SDL window create", t);
 
+        let t = Instant::now();
         let mut canvas = window
             .into_canvas()
             .accelerated()
             .present_vsync()
             .build()
             .map_err(|e| Error::Display(format!("SDL canvas: {e}")))?;
+        log_setup::log_elapsed("SDL canvas create", t);
 
         canvas.set_blend_mode(BlendMode::Blend);
 
@@ -73,6 +88,7 @@ impl Screen {
         }
 
         let texture_creator = canvas.texture_creator();
+        log_setup::log_elapsed("SDL screen init total", total);
 
         Ok(Self {
             _sdl: sdl,
@@ -114,13 +130,18 @@ impl Screen {
             return Ok(());
         }
 
+        let total = Instant::now();
+
+        let t = Instant::now();
         let mut texture = self
             .texture_creator
             .create_texture_streaming(PixelFormatEnum::RGBA32, w, h)
             .map_err(|e| Error::Display(format!("texture: {e}")))?;
+        log_setup::log_elapsed(&format!("SDL create_texture {w}x{h}"), t);
 
         texture.set_blend_mode(BlendMode::Blend);
 
+        let t = Instant::now();
         texture
             .with_lock(None, |buffer: &mut [u8], pitch: usize| {
                 for row in 0..h as usize {
@@ -132,16 +153,21 @@ impl Screen {
                 }
             })
             .map_err(|e| Error::Display(format!("texture lock: {e}")))?;
+        log_setup::log_elapsed(&format!("SDL texture upload {w}x{h}"), t);
 
         let dest = SdlRect::new(x, y, w, h);
         self.canvas
             .copy(&texture, None, dest)
             .map_err(|e| Error::Display(format!("canvas copy: {e}")))?;
+        log_setup::log_elapsed(&format!("SDL blit total {w}x{h} at ({x},{y})"), total);
         Ok(())
     }
 
     /// Flip / present the backbuffer.
     pub fn present(&mut self) {
+        let t = Instant::now();
         self.canvas.present();
+        // present_vsync can block ~16ms; use a higher threshold so normal vsync is not WARN.
+        log_setup::log_elapsed_threshold("SDL present", t, 50);
     }
 }

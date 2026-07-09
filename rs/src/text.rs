@@ -5,11 +5,13 @@
 
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::time::Instant;
 
 use fontdue::Font;
 use image::{Rgba, RgbaImage};
 
 use crate::error::{Error, Result};
+use crate::log_setup;
 
 /// Normal overlay size (pygame 36).
 pub const STYLE_NORMAL: f32 = 36.0;
@@ -25,6 +27,7 @@ pub struct TextRenderer {
 
 impl TextRenderer {
     pub fn new() -> Result<Self> {
+        let total = Instant::now();
         let path = find_sans_bold_font().ok_or_else(|| {
             Error::Display(
                 "no system sans-bold font found (tried FreeSansBold, DejaVuSans-Bold, LiberationSans-Bold)"
@@ -35,6 +38,7 @@ impl TextRenderer {
         let bytes = fs::read(&path)?;
         let font = Font::from_bytes(bytes, fontdue::FontSettings::default())
             .map_err(|e| Error::Display(format!("font parse error: {e}")))?;
+        log_setup::log_elapsed("TextRenderer::new", total);
         Ok(Self { font })
     }
 
@@ -43,6 +47,8 @@ impl TextRenderer {
         if msg.is_empty() {
             return RgbaImage::new(1, 1);
         }
+
+        let total = Instant::now();
 
         // Measure
         let mut width = 0.0f32;
@@ -85,6 +91,7 @@ impl TextRenderer {
             pen_x += metrics.advance_width;
         }
 
+        log_setup::log_elapsed(&format!("text render \"{msg}\" size={size}"), total);
         img
     }
 

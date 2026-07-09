@@ -37,7 +37,9 @@ Reload configuration (Unix):
 Environment:
   MAGIC_LANTERN_SEED=<u64>           deterministic RNG for shuffle / album weights
   MAGIC_LANTERN_AUTO_QUIT_SECS=<n>   auto-exit after n seconds (smoke tests)
-  RUST_LOG=<filter>                  tracing filter (default: info)
+  RUST_LOG=<filter>                  console tracing filter (default: info)
+                                     magic-lantern-debug.log always includes crate DEBUG
+                                     (timing); ops ≥100ms also WARN on console
 
 See https://github.com/normanlorrain/magic-lantern for more details."
 )]
@@ -117,21 +119,41 @@ fn run() -> Result<(), Error> {
     let _ = magic_lantern::signal_handler::init();
 
     let overrides = CliOverrides::from(&cli);
+    let mut cycle: u32 = 0;
 
     // Outer reload loop (Python cli.py `while runState`).
     loop {
+        cycle += 1;
+        let cycle_start = std::time::Instant::now();
+        tracing::debug!(cycle, "config/run cycle start");
+
+        let t = std::time::Instant::now();
         let config = Config::from_cli(&overrides)?;
+        log_setup::log_elapsed("Config::from_cli", t);
 
         if let Some(ref dir) = config.directory {
             tracing::info!("Single directory slide show: {}", dir.display());
+        } else if let Some(ref cf) = config.config_file {
+            tracing::info!("Config file: {}", cf.display());
         }
+        tracing::debug!(
+            albums = config.albums.len(),
+            shuffle = config.shuffle,
+            fullscreen = config.fullscreen,
+            interval = config.interval,
+            "resolved config"
+        );
 
         let should_reload = if config.dry_run.is_some() {
             controller::dry_run(&config)?
         } else {
+            let t = std::time::Instant::now();
             let mut ctl = Controller::new(config)?;
+            log_setup::log_elapsed("Controller::new (main)", t);
             ctl.run()?
         };
+
+        log_setup::log_elapsed(&format!("run cycle {cycle}"), cycle_start);
 
         if !should_reload {
             break;

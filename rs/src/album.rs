@@ -1,6 +1,7 @@
 //! An album is a collection of slides with sequence / random / atomic order.
 
 use std::path::PathBuf;
+use std::time::Instant;
 
 use rand::rngs::StdRng;
 use rand::seq::SliceRandom;
@@ -9,6 +10,7 @@ use walkdir::WalkDir;
 
 use crate::config::{AlbumConfig, Order};
 use crate::error::{Error, Result};
+use crate::log_setup;
 use crate::pdf::PdfCache;
 use crate::slide::Slide;
 
@@ -31,13 +33,21 @@ impl Album {
         mut pdf: Option<&mut PdfCache>,
         rng: &mut StdRng,
     ) -> Result<Self> {
-        tracing::debug!("Creating Album from {}.", cfg.folder.display());
+        let total = Instant::now();
+        tracing::debug!(
+            folder = %cfg.folder.display(),
+            order = ?cfg.order,
+            "Album::open start"
+        );
 
         let mut slides = Vec::new();
+        let mut n_images = 0u32;
+        let mut n_pdfs = 0u32;
 
         let walker = WalkDir::new(&cfg.folder).follow_links(false).into_iter();
         // walkdir doesn't filter dirs in-place like os.walk; we skip excluded
         // path components instead.
+        let t_walk = Instant::now();
         for entry in walker.filter_entry(|e| {
             if e.file_type().is_dir() {
                 let name = e.file_name().to_string_lossy();
@@ -71,9 +81,15 @@ impl Album {
 
             if ext == "pdf" {
                 tracing::info!("{}  PDF file", name);
+                n_pdfs += 1;
                 if let Some(ref mut cache) = pdf {
+                    let t = Instant::now();
                     match cache.convert(path) {
                         Ok(pages) => {
+                            log_setup::log_elapsed(
+                                &format!("album PDF convert {name} ({} pages)", pages.len()),
+                                t,
+                            );
                             for page in pages {
                                 slides.push(Slide::new(page, cfg.interval));
                             }
@@ -92,6 +108,7 @@ impl Album {
             }
 
             if IMAGE_EXTS.iter().any(|e| *e == ext) {
+                n_images += 1;
                 slides.push(Slide::new(path, cfg.interval));
                 continue;
             }
@@ -99,12 +116,28 @@ impl Album {
             // Skip known non-image junk quietly-ish (credits.txt etc.)
             tracing::warn!("{name}  Unknown file type");
         }
+        log_setup::log_elapsed(
+            &format!(
+                "album walk {} (images={n_images} pdfs={n_pdfs})",
+                cfg.folder.display()
+            ),
+            t_walk,
+        );
 
         if cfg.order == Order::Random {
             slides.shuffle(rng);
         } else {
             slides.sort();
         }
+
+        log_setup::log_elapsed(
+            &format!(
+                "Album::open total {} ({} slides)",
+                cfg.folder.display(),
+                slides.len()
+            ),
+            total,
+        );
 
         Ok(Album {
             order: cfg.order,

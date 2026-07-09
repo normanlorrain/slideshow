@@ -7,6 +7,7 @@
 //! - history keeps the last 10 slides for previous/next navigation
 
 use std::collections::VecDeque;
+use std::time::Instant;
 
 use rand::distributions::WeightedIndex;
 use rand::prelude::*;
@@ -15,6 +16,7 @@ use rand::rngs::StdRng;
 use crate::album::{build_albums, Album};
 use crate::config::{Config, Order};
 use crate::error::{Error, Result};
+use crate::log_setup;
 use crate::pdf::PdfCache;
 use crate::slide::Slide;
 
@@ -41,15 +43,38 @@ pub struct Slideshow {
 impl Slideshow {
     /// Build from config. `seed` makes album shuffle / weighted picks deterministic.
     pub fn new(config: &Config, seed: u64) -> Result<Self> {
+        let total = Instant::now();
+        tracing::debug!(
+            albums = config.albums.len(),
+            shuffle = config.shuffle,
+            seed,
+            "Slideshow::new start"
+        );
+
         let mut rng = StdRng::seed_from_u64(seed);
+
+        let t = Instant::now();
         let mut pdf = PdfCache::new().ok();
+        if pdf.is_some() {
+            log_setup::log_elapsed("PdfCache::new", t);
+        } else {
+            tracing::debug!("PdfCache unavailable; PDFs will be skipped");
+        }
+
+        let t = Instant::now();
         let albums = build_albums(
             &config.albums,
             &config.exclude,
             pdf.as_mut(),
             &mut rng,
         )?;
+        log_setup::log_elapsed(
+            &format!("build_albums ({} albums)", albums.len()),
+            t,
+        );
+
         let weights: Vec<u32> = albums.iter().map(|a| a.weight.max(1)).collect();
+        log_setup::log_elapsed("Slideshow::new total", total);
 
         Ok(Self {
             albums,
@@ -93,13 +118,20 @@ impl Slideshow {
     }
 
     pub fn get_next_slide(&mut self) -> Result<Slide> {
+        let t = Instant::now();
         // If browsing history, step toward the live edge first.
         if self.history_cursor < 0 {
             self.history_cursor += 1;
         }
 
-        let slide = if self.history_cursor < 0 {
+        let from_history = self.history_cursor < 0;
+        let slide = if from_history {
             let idx = Self::python_history_index(self.history.len(), self.history_cursor)?;
+            tracing::debug!(
+                history_cursor = self.history_cursor,
+                idx,
+                "next from history"
+            );
             self.history[idx].clone()
         } else {
             let slide = self.next_from_generator()?;
@@ -107,6 +139,10 @@ impl Slideshow {
             if self.history.len() > HISTORY_LIMIT {
                 if let Some(old) = self.history.pop_front() {
                     // Shared Rc identity: frees pixels for album + any other handles.
+                    tracing::debug!(
+                        file = %old.filename(),
+                        "history overflow: unload oldest"
+                    );
                     old.unload_image();
                 }
             }
@@ -114,10 +150,18 @@ impl Slideshow {
         };
 
         self.current = Some(slide.clone());
+        log_setup::log_elapsed(
+            &format!(
+                "get_next_slide {} (history={from_history})",
+                slide.filename()
+            ),
+            t,
+        );
         Ok(slide)
     }
 
     pub fn get_previous_slide(&mut self) -> Result<Slide> {
+        let t = Instant::now();
         if self.history.is_empty() {
             return Err(Error::Slideshow("no history".into()));
         }
@@ -137,6 +181,14 @@ impl Slideshow {
         let idx = Self::python_history_index(self.history.len(), self.history_cursor)?;
         let slide = self.history[idx].clone();
         self.current = Some(slide.clone());
+        log_setup::log_elapsed(
+            &format!(
+                "get_previous_slide {} (cursor={})",
+                slide.filename(),
+                self.history_cursor
+            ),
+            t,
+        );
         Ok(slide)
     }
 

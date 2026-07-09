@@ -10,6 +10,7 @@ use sdl2::keyboard::Keycode;
 
 use crate::config::Config;
 use crate::error::{Error, Result};
+use crate::log_setup;
 use crate::screen::Screen;
 use crate::signal_handler::{self, ReloadFlag};
 use crate::slideshow::Slideshow;
@@ -37,17 +38,30 @@ pub struct Controller {
 
 impl Controller {
     pub fn new(config: Config) -> Result<Self> {
+        let total = Instant::now();
+        tracing::debug!("Controller::new start");
+
         let seed = std::env::var("MAGIC_LANTERN_SEED")
             .ok()
             .and_then(|s| s.parse().ok())
             .unwrap_or(0);
 
         // Install SIGUSR1 before slow work (PDF rasterization).
+        let t = Instant::now();
         let reload = signal_handler::init()?;
+        log_setup::log_elapsed("signal_handler init", t);
 
+        let t = Instant::now();
         let screen = Screen::new(config.fullscreen)?;
+        log_setup::log_elapsed("Controller: Screen::new", t);
+
+        let t = Instant::now();
         let text = TextRenderer::new()?;
+        log_setup::log_elapsed("Controller: TextRenderer::new", t);
+
+        let t = Instant::now();
         let slideshow = Slideshow::new(&config, seed)?;
+        log_setup::log_elapsed("Controller: Slideshow::new", t);
 
         let photo_interval = Duration::from_secs(config.interval.max(1));
 
@@ -56,6 +70,7 @@ impl Controller {
             .and_then(|s| s.parse::<u64>().ok())
             .map(|s| Instant::now() + Duration::from_secs(s));
 
+        log_setup::log_elapsed("Controller::new total", total);
         Ok(Self {
             slideshow,
             screen,
@@ -71,7 +86,10 @@ impl Controller {
 
     /// Run until quit (`false`) or reload requested (`true`).
     pub fn run(&mut self) -> Result<bool> {
+        tracing::debug!("Controller::run enter event loop");
+        let t = Instant::now();
         self.show_new_slide(Direction::Next)?;
+        log_setup::log_elapsed("Controller: first show_new_slide", t);
 
         let mut event_pump = self
             .screen
@@ -119,25 +137,28 @@ impl Controller {
                         keycode: Some(key),
                         repeat: false,
                         ..
-                    } => match key {
-                        Keycode::Q | Keycode::Escape => {
-                            tracing::debug!("quit key");
-                            return Ok(false);
+                    } => {
+                        tracing::debug!(?key, "keydown");
+                        match key {
+                            Keycode::Q | Keycode::Escape => {
+                                tracing::debug!("quit key");
+                                return Ok(false);
+                            }
+                            Keycode::N | Keycode::Right => {
+                                self.next()?;
+                            }
+                            Keycode::P | Keycode::Left => {
+                                self.previous()?;
+                            }
+                            Keycode::Y => {
+                                self.toggle_year()?;
+                            }
+                            Keycode::Space => {
+                                self.toggle_pause()?;
+                            }
+                            _ => {}
                         }
-                        Keycode::N | Keycode::Right => {
-                            self.next()?;
-                        }
-                        Keycode::P | Keycode::Left => {
-                            self.previous()?;
-                        }
-                        Keycode::Y => {
-                            self.toggle_year()?;
-                        }
-                        Keycode::Space => {
-                            self.toggle_pause()?;
-                        }
-                        _ => {}
-                    },
+                    }
                     _ => {}
                 }
             }
@@ -163,10 +184,13 @@ impl Controller {
             }
 
             if !self.pause && Instant::now() >= self.next_due {
+                tracing::debug!("photo timer fired");
+                let t = Instant::now();
                 self.show_new_slide(Direction::Next)?;
+                log_setup::log_elapsed("Controller: timer show_new_slide", t);
                 tracing::debug!(
-                    "Next slide in {} msec",
-                    self.photo_interval.as_millis()
+                    next_in_ms = self.photo_interval.as_millis(),
+                    "armed next photo interval"
                 );
                 self.arm_timer();
             }
@@ -178,9 +202,12 @@ impl Controller {
     }
 
     fn show_new_slide(&mut self, direction: Direction) -> Result<()> {
+        let total = Instant::now();
         let screen_rect = self.screen.rect();
+        tracing::debug!(?direction, "show_new_slide start");
 
         let mut attempts = 0;
+        let t_pick = Instant::now();
         let slide = loop {
             attempts += 1;
             if attempts > 100 {
@@ -188,6 +215,7 @@ impl Controller {
                     "too many bad slide files in a row".into(),
                 ));
             }
+            let t = Instant::now();
             let slide = match direction {
                 Direction::Next => self.slideshow.get_next_slide()?,
                 Direction::Previous => match self.slideshow.get_previous_slide() {
@@ -195,8 +223,17 @@ impl Controller {
                     Err(_) => self.slideshow.get_next_slide()?,
                 },
             };
+            log_setup::log_elapsed("slideshow pick slide", t);
+
+            let t = Instant::now();
             match slide.get_surface(screen_rect) {
-                Ok(_) => break slide,
+                Ok(_) => {
+                    log_setup::log_elapsed(
+                        &format!("get_surface {}", slide.filename()),
+                        t,
+                    );
+                    break slide;
+                }
                 Err(Error::Slide(path)) => {
                     tracing::warn!("Bad slide file: {}", path.display());
                     continue;
@@ -204,17 +241,44 @@ impl Controller {
                 Err(e) => return Err(e),
             }
         };
+        log_setup::log_elapsed(
+            &format!("pick+load attempts={attempts} {}", slide.filename()),
+            t_pick,
+        );
 
-        tracing::debug!("{} interval:{}", slide.filename(), slide.interval());
+        tracing::debug!(
+            file = %slide.filename(),
+            interval_s = slide.interval(),
+            "displaying slide"
+        );
 
+        let t = Instant::now();
         self.screen.fill_black();
+        log_setup::log_elapsed("fill_black", t);
+
+        // Surface already loaded above; second call is a cheap clone.
+        let t = Instant::now();
         let surface = slide.get_surface(screen_rect)?;
         let (x, y) = slide.coordinates(screen_rect)?;
+        log_setup::log_elapsed("get_surface+coords (cached)", t);
+
+        let t = Instant::now();
         self.screen.blit(&surface, x, y)?;
+        log_setup::log_elapsed("blit slide", t);
+
+        let t = Instant::now();
         self.show_metadata()?;
+        log_setup::log_elapsed("show_metadata", t);
+
+        let t = Instant::now();
         self.screen.present();
+        log_setup::log_elapsed("present after slide", t);
 
         self.photo_interval = Duration::from_secs(slide.interval().max(1));
+        log_setup::log_elapsed(
+            &format!("show_new_slide total {}", slide.filename()),
+            total,
+        );
         Ok(())
     }
 
@@ -230,6 +294,7 @@ impl Controller {
             .ok_or_else(|| Error::Slideshow("no current slide".into()))?;
 
         if self.pause {
+            let t = Instant::now();
             let pause_img = self.text.message_normal("PAUSE");
             self.screen.blit(&pause_img, pad, pad)?;
 
@@ -241,20 +306,25 @@ impl Controller {
             let datetime = self.text.message_normal(&slide.datetime());
             let y = self.screen.height() as i32 - datetime.height() as i32 - pad;
             self.screen.blit(&datetime, pad, y)?;
+            log_setup::log_elapsed("overlay pause labels", t);
         }
 
         if self.show_year {
+            let t = Instant::now();
             let dt = slide.datetime();
             let year = if dt.len() >= 4 { &dt[..4] } else { &dt };
             let year_img = self.text.message_heading(year);
             let x = self.screen.width() as i32 - year_img.width() as i32 - pad;
             self.screen.blit(&year_img, x, pad)?;
+            log_setup::log_elapsed("overlay year", t);
         }
         Ok(())
     }
 
     fn toggle_pause(&mut self) -> Result<()> {
+        let t = Instant::now();
         self.pause = !self.pause;
+        tracing::debug!(pause = self.pause, "toggle_pause");
         if self.pause {
             self.show_metadata()?;
             self.screen.present();
@@ -262,11 +332,14 @@ impl Controller {
             self.show_new_slide(Direction::Next)?;
             self.arm_timer();
         }
+        log_setup::log_elapsed("toggle_pause total", t);
         Ok(())
     }
 
     fn toggle_year(&mut self) -> Result<()> {
+        let t = Instant::now();
         self.show_year = !self.show_year;
+        tracing::debug!(show_year = self.show_year, "toggle_year");
         if !self.show_year {
             if let Some(slide) = self.slideshow.current().cloned() {
                 let screen_rect = self.screen.rect();
@@ -279,28 +352,36 @@ impl Controller {
         }
         self.show_metadata()?;
         self.screen.present();
+        log_setup::log_elapsed("toggle_year total", t);
         Ok(())
     }
 
     fn next(&mut self) -> Result<()> {
+        let t = Instant::now();
+        tracing::debug!("key next");
         self.show_new_slide(Direction::Next)?;
         if !self.pause {
             self.arm_timer();
         }
+        log_setup::log_elapsed("key next total", t);
         Ok(())
     }
 
     fn previous(&mut self) -> Result<()> {
+        let t = Instant::now();
+        tracing::debug!("key previous");
         self.show_new_slide(Direction::Previous)?;
         if !self.pause {
             self.arm_timer();
         }
+        log_setup::log_elapsed("key previous total", t);
         Ok(())
     }
 }
 
 /// Dry-run path (no window): print slide names.
 pub fn dry_run(config: &Config) -> Result<bool> {
+    let total = Instant::now();
     let seed = std::env::var("MAGIC_LANTERN_SEED")
         .ok()
         .and_then(|s| s.parse().ok())
@@ -308,7 +389,10 @@ pub fn dry_run(config: &Config) -> Result<bool> {
     let n = config
         .dry_run
         .ok_or_else(|| Error::Config("dry_run not set".into()))?;
+    let t = Instant::now();
     let mut show = Slideshow::new(config, seed)?;
+    log_setup::log_elapsed("dry_run Slideshow::new", t);
     crate::slideshow::dry_run(&mut show, n)?;
+    log_setup::log_elapsed(&format!("dry_run total n={n}"), total);
     Ok(false)
 }
