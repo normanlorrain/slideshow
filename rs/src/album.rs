@@ -19,8 +19,6 @@ const IMAGE_EXTS: &[&str] = &["bmp", "png", "jpg", "jpeg"];
 pub struct Album {
     pub order: Order,
     pub weight: u32,
-    pub interval: u64,
-    pub path: PathBuf,
     slides: Vec<Slide>,
     index: usize,
 }
@@ -111,8 +109,6 @@ impl Album {
         Ok(Album {
             order: cfg.order,
             weight: cfg.weight,
-            interval: cfg.interval,
-            path: cfg.folder.clone(),
             slides,
             index: 0,
         })

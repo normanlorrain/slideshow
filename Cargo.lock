@@ -812,7 +812,6 @@ dependencies = [
 name = "magic-lantern"
 version = "0.1.0"
 dependencies = [
- "anyhow",
  "clap",
  "fontdue",
  "image",

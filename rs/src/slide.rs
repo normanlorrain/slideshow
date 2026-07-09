@@ -37,7 +37,6 @@ struct SlideInner {
     x: i32,
     y: i32,
     datetime: String,
-    orientation: Option<u32>,
     /// Fitted / scaled RGBA buffer ready to blit (Python `surface`).
     image: Option<RgbaImage>,
     image_loaded: bool,
@@ -54,7 +53,6 @@ impl Slide {
                 x: 0,
                 y: 0,
                 datetime: String::new(),
-                orientation: None,
                 image: None,
                 image_loaded: false,
             })),
@@ -63,10 +61,6 @@ impl Slide {
 
     pub fn path(&self) -> PathBuf {
         self.inner.borrow().path.clone()
-    }
-
-    pub fn path_ref<R>(&self, f: impl FnOnce(&Path) -> R) -> R {
-        f(&self.inner.borrow().path)
     }
 
     pub fn interval(&self) -> u64 {
@@ -103,10 +97,6 @@ impl Slide {
 
     pub fn datetime(&self) -> String {
         self.inner.borrow().datetime.clone()
-    }
-
-    pub fn orientation(&self) -> Option<u32> {
-        self.inner.borrow().orientation
     }
 
     pub fn original_size(&self) -> (u32, u32) {
@@ -147,7 +137,6 @@ impl Slide {
         b.x = 0;
         b.y = 0;
         b.datetime.clear();
-        b.orientation = None;
         b.image = None;
         b.image_loaded = false;
     }
@@ -196,7 +185,6 @@ impl Slide {
             b.x = fitted.x;
             b.y = fitted.y;
             b.datetime = datetime.unwrap_or_default();
-            b.orientation = exif_orientation;
             b.image = Some(scaled);
             b.image_loaded = true;
         }

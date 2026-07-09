@@ -27,16 +27,6 @@ impl Default for Order {
     }
 }
 
-impl Order {
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Self::Sequence => "sequence",
-            Self::Atomic => "atomic",
-            Self::Random => "random",
-        }
-    }
-}
-
 /// Raw TOML shape (global section + albums array).
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]

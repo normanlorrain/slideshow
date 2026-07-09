@@ -9,7 +9,7 @@ use image::RgbaImage;
 use sdl2::pixels::PixelFormatEnum;
 use sdl2::rect::Rect as SdlRect;
 use sdl2::render::{BlendMode, Canvas, TextureCreator};
-use sdl2::video::{FullscreenType, Window, WindowContext};
+use sdl2::video::{Window, WindowContext};
 use sdl2::Sdl;
 use sdl2::VideoSubsystem;
 
@@ -99,24 +99,6 @@ impl Screen {
     /// Access the SDL context for the event pump (controller).
     pub fn sdl(&self) -> &Sdl {
         &self._sdl
-    }
-
-    pub fn set_fullscreen(&mut self, on: bool) -> Result<()> {
-        let mode = if on {
-            FullscreenType::Desktop
-        } else {
-            FullscreenType::Off
-        };
-        self.canvas
-            .window_mut()
-            .set_fullscreen(mode)
-            .map_err(|e| Error::Display(format!("fullscreen: {e}")))?;
-        let (w, h) = self.canvas.output_size().map_err(|e| {
-            Error::Display(format!("SDL output size: {e}"))
-        })?;
-        self.width = w;
-        self.height = h;
-        Ok(())
     }
 
     pub fn fill_black(&mut self) {
