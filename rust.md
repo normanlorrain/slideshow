@@ -307,18 +307,12 @@ Implement and test these carefully; they define “same app”:
 
 ### Phase 0 — Spike (1–3 days) ✅ done
 
-- [x] Window + blit scaled image + keyboard quit (`rs/examples/spike_display.rs`, via `minifb`).
-- [x] EXIF orientation / DateTimeOriginal on test images (`rs/examples/spike_exif.rs`).
-- [x] PDF: convert page 0 of `tests/pdfs/Example presentation.pdf` to PNG (`rs/examples/spike_pdf.rs`).
+- [x] Window + blit scaled image + keyboard quit (originally `minifb` spike; production uses SDL2).
+- [x] EXIF orientation / DateTimeOriginal on test images.
+- [x] PDF: convert page 0 of `tests/pdfs/Example presentation.pdf` to bitmap.
 - [x] Decision record: final crate set for graphics + PDF (see §18 below).
 
-**Run the spikes** (from repo root):
-
-```bash
-cargo run --example spike_exif
-cargo run --example spike_pdf
-cargo run --example spike_display
-```
+Spike example binaries were removed after the port; decisions live in §18 and production code under `rs/src/`.
 
 ### Phase 1 — Core non-UI (parity unit tests) ✅ done
 
@@ -562,7 +556,7 @@ Recorded after running the spikes on this machine (2026-07-08). Environment note
 
 | Concern | Crate / tool | Rationale |
 |---------|--------------|-----------|
-| CLI | **`clap`** (derive) | Phase 1+; not needed for spikes |
+| CLI | **`clap`** (derive) | CLI entrypoint |
 | Config | **`toml` + `serde`** | Phase 1+ |
 | Errors | **`thiserror` + `anyhow`** | Phase 1+ |
 | Logging | **`tracing` + `tracing-subscriber` + `tracing-appender`** | Phase 1+ |
@@ -571,29 +565,27 @@ Recorded after running the spikes on this machine (2026-07-08). Environment note
 | EXIF | **`kamadak-exif` 0.6** | Reads `Orientation` + `DateTimeOriginal`; works on sample paintings (dates present). Apply pygame-compatible CCW rotations: tag 3→180°, 6→270°, 8→90° |
 | Display | **`sdl2` 0.37** | Product backend (fullscreen, event pump, textures). Requires `libsdl2-dev`. Images as RGBA textures; text via `fontdue` (no SDL_ttf link required) |
 | PDF | **`pdfium-render` 0.9** + runtime `libpdfium.so` | In-process; **200 DPI** default (screen); temp PNG cache. Bind via `PDFIUM_LIB_PATH` / next to binary / `~/.local/pdfium/lib` |
-| Temp files | **`tempfile`** | PDF page cache + spike outputs |
+| Temp files | **`tempfile`** | PDF page cache |
 | Signals | **`signal-hook`** | Phase 3+; Unix `SIGUSR1` only |
 | Walk dirs | **`walkdir`** | Phase 1 album discovery |
 
-### 18.3 Spike results
+### 18.3 Spike results (historical)
 
 | Spike | Result |
 |-------|--------|
-| `spike_exif` | All `tests/images/**` load via `image`. Paintings expose `DateTimeOriginal`; no orientation tags in current fixtures (code path for 3/6/8 still implemented). Thumbnail written to `/tmp/magic-lantern-spike-exif.png`. |
-| `spike_pdf` | `pdftoppm -png -r 600 -singlefile` succeeded; output `/tmp/magic-lantern-spike-pdf.png`. |
-| `spike_display` | Window opened, image fitted (e.g. rembrandt 689×899 → 552×720 at offset (364,0)), quit on key works. |
+| EXIF | All `tests/images/**` load via `image`. Paintings expose `DateTimeOriginal`; no orientation tags in current fixtures (code path for 3/6/8 still implemented). |
+| PDF | Initial `pdftoppm` path succeeded; production later switched to PDFium. |
+| Display | Window opened, image fitted (e.g. rembrandt 689×899 → 552×720 at offset (364,0)), quit on key works. |
+
+Spike example crates under `rs/examples/` have been removed; behavior is covered by the main app and `phase5_validation` tests.
 
 ### 18.4 Open follow-ups (not blocking Phase 1)
 
-1. Install SDL2 **dev** packages on build hosts and add a gated `spike_sdl2` example before Phase 3.
+1. Install SDL2 **dev** packages on build hosts — done for SDL2 production path.
 2. ~~Spike pdfium-render~~ done — production path uses PDFium.
 3. Port pygame `Rect.fit` exactly (unit tests) — current fit math is aspect-correct letterbox, not yet line-for-line.
 4. Test images lack orientation tags 3/6/8; add a fixture or synthetic EXIF sample in Phase 2 tests.
 
-### 18.5 Dependency footprint (Phase 0 Cargo.toml)
+### 18.5 Dependency footprint
 
-Only what the spikes need today:
-
-- `image`, `kamadak-exif`, `tempfile`, `minifb`
-
-Phase 1 will add `clap`, `serde`, `toml`, `rand`, `thiserror`, `anyhow`, `tracing*`, `walkdir` without pulling SDL/PDF into the default build until later phases.
+Production `Cargo.toml` includes the full stack: `clap`, `serde`, `toml`, `rand`, `thiserror`, `anyhow`, `tracing*`, `walkdir`, `image`, `kamadak-exif`, `tempfile`, `pdfium-render`, `sdl2`, `fontdue`, `signal-hook`.

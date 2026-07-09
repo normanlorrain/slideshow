@@ -28,18 +28,6 @@ path = "rs/src/lib.rs"
 name = "magic-lantern"
 path = "rs/src/main.rs"
 
-[[example]]
-name = "spike_exif"
-path = "rs/examples/spike_exif.rs"
-
-[[example]]
-name = "spike_pdf"
-path = "rs/examples/spike_pdf.rs"
-
-[[example]]
-name = "spike_display"
-path = "rs/examples/spike_display.rs"
-
 [dependencies]
 # CLI
 clap = { version = "4", features = ["derive"] }
@@ -56,7 +44,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 rand = "0.8"
 # Directory walk
 walkdir = "2"
-# Image load / scale (JPEG, PNG, BMP) — used by Phase 0 spikes; later phases
+# Image load / scale (JPEG, PNG, BMP)
 image = "0.25"
 # EXIF orientation + DateTimeOriginal
 kamadak-exif = "0.6"
